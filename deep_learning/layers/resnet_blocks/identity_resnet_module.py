@@ -1,0 +1,70 @@
+#!/usr/bin/python
+
+from torch import nn
+
+class IdentityResNetModule(nn.Module):
+    def __init__(self, in_channels, intermediate_channels, expansion=4, identity_downsample=None, stride=1):
+        super().__init__()
+        self.bn1 = nn.BatchNorm2d(in_channels)
+        self.conv1 = nn.Conv2d(
+                in_channels,
+                intermediate_channels,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+                bias=False,
+            )
+
+        self.bn2 = nn.BatchNorm2d(intermediate_channels)
+        self.conv2 = nn.Conv2d(
+                intermediate_channels,
+                intermediate_channels,
+                kernel_size=3,
+                stride=stride,
+                padding=1,
+                bias=False,
+            )
+
+        self.bn3 = nn.BatchNorm2d(intermediate_channels)
+        self.conv3 = nn.Conv2d(
+                intermediate_channels,
+                intermediate_channels*expansion,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+                bias=False,
+            )
+
+        self.relu  = nn.ReLU(inplace=True)
+        self.identity_downsample = identity_downsample
+
+    def reset_parameters(self):
+        self.bn1.reset_parameters()
+        self.conv1.reset_parameters()
+        self.bn2.reset_parameters()
+        self.conv2.reset_parameters()
+        self.bn3.reset_parameters()
+        self.conv3.reset_parameters()
+        if (self.identity_downsample is not None):
+            self.identity_downsample.reset_parameters()
+
+    def forward(self, x):
+        identity = x
+        # compute the residual call
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.conv1(x)
+
+        x = self.bn2(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+
+        x = self.bn3(x)
+        #x = self.relu(x)
+        x = self.conv3(x)
+
+        if (self.identity_downsample is not None):
+            identity = self.identity_downsample(identity)
+
+        x += identity # add the identity (skip connection) and apply relu activation
+        return x

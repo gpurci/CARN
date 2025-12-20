@@ -1,0 +1,19 @@
+
+# Python
+.ipynb_checkpoints
+.cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[codz]
+*.npy
+*$py.class
+logs/
+out/
+info/
+data/
+!data/*.csv
+*.cmd
+venv/
+.env
