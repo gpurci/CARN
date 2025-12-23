@@ -9,18 +9,19 @@ sys_remove_modules("callback.callback")
 from callback.callback import *
 
 class RunConfigs():
-    def __init__(self, model, trainer, epochs, train_dl, val_dl, history_path):
+    def __init__(self, model, trainer, epochs, train_dl, val_dl, history_path, reset_layers=None):
         self.model   = model
         self.trainer = trainer
         self.epochs  = epochs
         self.train_dl = train_dl
         self.val_dl   = val_dl
         self.callback = Callback(filename=history_path, freq=1)
+        self.reset_layers = reset_layers
 
     def run(self, name, **conf):
         print("Start running name: '{}', conf {}".format(name, conf))
         # reseteaza parametrii din model
-        self.model.reset_parameters()
+        self.model.reset_parameters(self.reset_layers)
         # despacheteaza parametriii din config
         optimizer           = conf.get("optimizer", None)
         opt_hyperparameters = conf.get("opt_hyperparameters", None)
