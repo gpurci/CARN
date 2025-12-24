@@ -40,7 +40,7 @@ class RunConfigs():
         if (lr_scheduler is not None):
             lr_scheduler(optimizer, **lr_scheduler_hyperparameters)
         # seteaza noul optimizator din config
-        self.trainer.setOptimizer(optimizer)
+        self.trainer.setOptimizer(optimizer, lr_scheduler)
         # antreneaza modelul
         start_time = time.time()
         logs = self.trainer.run(self.train_dl, self.val_dl, self.epochs, name)
