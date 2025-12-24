@@ -35,7 +35,7 @@ class IdentityResNetModule(nn.Module):
                 bias=False,
             )
 
-        self.relu  = nn.ReLU(inplace=True)
+        self.activ_fn = nn.SiLU(inplace=True)
         self.identity_downsample = identity_downsample
 
     def reset_parameters(self):
@@ -52,19 +52,19 @@ class IdentityResNetModule(nn.Module):
         identity = x
         # compute the residual call
         x = self.bn1(x)
-        x = self.relu(x)
+        x = self.activ_fn(x)
         x = self.conv1(x)
 
         x = self.bn2(x)
-        x = self.relu(x)
+        x = self.activ_fn(x)
         x = self.conv2(x)
 
         x = self.bn3(x)
-        #x = self.relu(x)
+        x = self.activ_fn(x)
         x = self.conv3(x)
 
         if (self.identity_downsample is not None):
             identity = self.identity_downsample(identity)
 
-        x += identity # add the identity (skip connection) and apply relu activation
+        x += identity # add the identity (skip connection) and apply activ_fn activation
         return x
