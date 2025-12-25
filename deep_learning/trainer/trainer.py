@@ -80,10 +80,10 @@ class Trainer():
             data = self.transforms(data)
          if (self.all_transforms is not None):
             data, target = self.all_transforms(data, target)
-         if (self.lr_scheduler is not None):
-            self.lr_scheduler.step()
          predicted, loss = self.step(data, target)
 
+         if (self.lr_scheduler is not None):
+            self.lr_scheduler.step()
          # This metric is actually an approximation of an accuracy, we are checking whether the dominant class
          # predicted by the model is also equal to the dominant soft label
          # The reason we are moving the data from device back to CPU is because these calculations are usually
