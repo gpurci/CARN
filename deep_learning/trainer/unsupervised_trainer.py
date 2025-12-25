@@ -10,11 +10,11 @@ class UnsupervisedTrainer():
             model: nn.Module,
             optimizer: torch.optim.Optimizer,
             criterion: nn.Module,
-            use_cpu=False,
+            device="cuda",
             type_compile="normal",
             disable_tqdm: bool = False, 
     ):
-        self.device = torch.device("cpu") if use_cpu else torch.accelerator.current_accelerator()
+        self.device = device
         print(f"Using device: {self.device}")
         # Efficiency stuff
         if (self.device.type == "cuda"):
