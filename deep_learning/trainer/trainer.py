@@ -14,6 +14,7 @@ class Trainer():
          disable_tqdm: bool = False, 
          transforms=None, 
          all_transforms=None, 
+         lr_scheduler=None,
    ):
       self.device = device
       print(f"Using device: {self.device}")
@@ -44,9 +45,12 @@ class Trainer():
       # 
       self.disable_tqdm = disable_tqdm
       self.best_va_acc  = 0.0
+      # 
+      self.lr_scheduler = lr_scheduler
 
-   def setOptimizer(self, optimizer):
-      self.optimizer = optimizer
+   def setOptimizer(self, optimizer, lr_scheduler=None):
+      self.optimizer    = optimizer
+      self.lr_scheduler = lr_scheduler
 
    def step(self, data: torch.Tensor, target: torch.Tensor):
       predicted = self.model(data)
@@ -76,18 +80,18 @@ class Trainer():
             data = self.transforms(data)
          if (self.all_transforms is not None):
             data, target = self.all_transforms(data, target)
-
+         if (self.lr_scheduler is not None):
+            self.lr_scheduler.step()
          predicted, loss = self.step(data, target)
 
-         if target.ndim > 1:
-            # We do this when cutmix or mixup was used, transforming the hard labels into soft labels
-            target = target.argmax(1)
          # This metric is actually an approximation of an accuracy, we are checking whether the dominant class
          # predicted by the model is also equal to the dominant soft label
          # The reason we are moving the data from device back to CPU is because these calculations are usually
          # faster on CPU for small batch sizes
          # We use detach because we tell the autograd engine to not track the gradients for predicted anymore
-         correct += predicted.detach().cpu().argmax(dim=1).eq(target.detach().cpu()).sum().item()
+         predicted = predicted.detach().cpu().argmax(dim=1)
+         target    = target.detach().cpu().argmax(dim=1)
+         correct += predicted.eq(target).sum().item()
          total   += data.size(0)
          total_loss += float(loss.item())
 
@@ -122,7 +126,9 @@ class Trainer():
 
          # Here we don't need to argmax the target, because we have hard labels. We don't use DA during validation.
          # We don't need to detach, because we are already in inference_mode
-         correct += predicted.detach().cpu().argmax(dim=1).eq(target.detach().cpu()).sum().item()
+         predicted = predicted.detach().cpu().argmax(dim=1)
+         target    = target.detach().cpu()
+         correct += predicted.eq(target).sum().item()
          total   += data.size(0)
          total_loss += loss
 
@@ -185,7 +191,9 @@ class Trainer():
 
          # Here we don't need to argmax the target, because we have hard labels. We don't use DA during validation.
          # We don't need to detach, because we are already in inference_mode
-         correct += predicted.detach().cpu().argmax(dim=1).eq(target.detach().cpu()).sum().item()
+         predicted = predicted.detach().cpu().argmax(dim=1)
+         target    = target.detach().cpu()
+         correct += predicted.eq(target).sum().item()
          total   += data.size(0)
          total_loss += loss
 
