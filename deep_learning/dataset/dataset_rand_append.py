@@ -8,8 +8,8 @@ import numpy as np
 class DatasetRandAppend(Dataset):
     def __init__(self, dataset:dict, transform=None, train=True, rand_class_size=4, freq_rand=10):
         # data aquisition
-        self.data    = np.array(dataset["inputs"])
-        self.targets = np.array(dataset["targets"])
+        self.data    = dataset["inputs"]
+        self.targets = dataset["targets"]
         self.dataset_num_classes = dataset["num_classes"]
         # data transformation
         self.transform  = transform
@@ -32,7 +32,6 @@ class DatasetRandAppend(Dataset):
             self.apply_fn = self.__append_rand
         else:
             self.apply_fn = self.__identity
-
 
     def __append_rand(self, idx:int):
         if (self.count >= self.FREQ_RAND_SIZE):
