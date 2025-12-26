@@ -5,13 +5,13 @@ from torch import nn
 from collections import OrderedDict
 
 from sys_function import * # este in root
-sys_remove_modules("layers.resnet_blocks.identity_resnet")
-sys_remove_modules("layers.identity_conv2d_downsample")
-sys_remove_modules("layers.conv2d_upsample")
+sys_remove_modules("layers.resnet.identity_resnet")
+sys_remove_modules("layers.resnet.identity_conv2d_downsample")
+sys_remove_modules("layers.up_down_sample.conv2d_upsample")
 
-from layers.resnet_blocks.identity_resnet import *
-from layers.identity_conv2d_downsample import *
-from layers.conv2d_upsample import *
+from layers.resnet.identity_resnet import *
+from layers.resnet.identity_conv2d_downsample import *
+from layers.up_down_sample.conv2d_upsample import *
 
 class IdentityResNetUpBlock(nn.Module):
    def __init__(self, name, **conf):
