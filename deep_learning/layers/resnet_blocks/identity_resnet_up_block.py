@@ -5,11 +5,11 @@ from torch import nn
 from collections import OrderedDict
 
 from sys_function import * # este in root
-sys_remove_modules("layers.resnet_blocks.identity_resnet_module")
+sys_remove_modules("layers.resnet_blocks.identity_resnet")
 sys_remove_modules("layers.identity_conv2d_downsample")
 sys_remove_modules("layers.conv2d_upsample")
 
-from layers.resnet_blocks.identity_resnet_module import *
+from layers.resnet_blocks.identity_resnet import *
 from layers.identity_conv2d_downsample import *
 from layers.conv2d_upsample import *
 
@@ -46,7 +46,7 @@ class IdentityResNetUpBlock(nn.Module):
             layers.append((block_name, layer))
          if (in_channels != out_channels):
             identity_downsample = IdentityConv2dDownSample(in_channels, out_channels, stride=stride)
-         layer = IdentityResNetModule(in_channels, intermediate_channels, 
+         layer = IdentityResNet(in_channels, intermediate_channels, 
                                  expansion=expansion, identity_downsample=identity_downsample, stride=1)
          in_channels = out_channels
          block_name = "{}_{}".format(key, idx)

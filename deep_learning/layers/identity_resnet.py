@@ -2,7 +2,7 @@
 
 from torch import nn
 
-class IdentityResNetModule(nn.Module):
+class IdentityResNet(nn.Module):
     def __init__(self, in_channels, intermediate_channels, expansion=4, identity_downsample=None, stride=1):
         super().__init__()
         self.bn1 = nn.BatchNorm2d(in_channels)
