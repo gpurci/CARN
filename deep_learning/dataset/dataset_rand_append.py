@@ -31,7 +31,7 @@ class DatasetRandAppend(Dataset):
         # data 
         if (train):
             self.apply_fn = self.__append_rand
-            self.size = self.data.shape[0] + (self.data.shape[0]//self.SIZE_VIRTUAL_DATA)
+            self.size = self.data.shape[0] + self.SIZE_VIRTUAL_DATA
         else:
             self.apply_fn = self.__identity
             self.size = self.data.shape[0]
