@@ -8,11 +8,11 @@ import warnings
 from sys_function import * # este in root
 sys_remove_modules("layers.resnet_blocks.identity_resnet_block")
 sys_remove_modules("layers.resnet_blocks.identity_resnet_up_block")
-sys_remove_modules("layers.resnet_blocks.input_by_stride")
+sys_remove_modules("layers.inputs.input_by_stride")
 
 from layers.resnet_blocks.identity_resnet_block import *
 from layers.resnet_blocks.identity_resnet_up_block import *
-from layers.resnet_blocks.input_by_stride import *
+from layers.inputs.input_by_stride import *
 
 class ResNetUnsupervised(nn.Module):
    def __init__(self, name, initializer=None, **conf):
