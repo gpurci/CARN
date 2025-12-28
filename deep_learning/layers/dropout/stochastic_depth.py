@@ -19,5 +19,5 @@ class StochasticDepth(nn.Module):
          dropout_tensor = torch.rand((x.shape[0], *self.shape), 
                device=x.device, requires_grad=False, dtype=torch.float32) < self.surv_prob
          dropout_tensor = torch.div(dropout_tensor, self.surv_prob)
-         x *= dropout_tensor
+         x = x * dropout_tensor
       return x
