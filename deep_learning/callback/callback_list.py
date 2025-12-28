@@ -1,12 +1,15 @@
 #!/usr/bin/python
 
+from livelossplot import PlotLossesKeras
+from callback.callback_base import *
+
 class CallbacksList(object):
    def __init__(self, callbacks):
       """"""
       if (callbacks is not None):
          if (isinstance(callbacks, list)):
                for i, callback in enumerate(callbacks, 0):
-                  if (not isinstance(callback, (type(Callbacks()), type(PlotLossesKeras())))):
+                  if (not isinstance(callback, (type(CallbacksBase()), type(PlotLossesKeras())))):
                      raise NameError("The callback: '{}' is type '{}' not as 'Callbacks' object".format(i, type(callback)))
          else:
             raise NameError("The argument need to be as 'List' object, but is '{}'".format(type(callbacks)))
