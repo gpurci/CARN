@@ -30,6 +30,7 @@ class IdentityResNextSeSdBlock(nn.Module):
       in_channels = conf.get("in_channels", None)
       expansion   = conf.get("expansion", 4)
       stride      = conf.get("stride", 1)
+      groups      = conf.get("groups", 1)
       surv_prob   = conf.get("surv_prob", 0.5)
       intermediate_channels = conf.get("intermediate_channels", None)
       num_residual_blocks   = conf.get("num_residual_blocks", 1)
@@ -41,6 +42,7 @@ class IdentityResNextSeSdBlock(nn.Module):
          if ((stride != 1) or (in_channels != out_channels)):
             identity_downsample = IdentityConv2dDownSample(in_channels, out_channels, stride=stride)
          layer = IdentityResNextSeSd(in_channels, intermediate_channels, 
+                                 groups=groups,
                                  expansion=expansion, identity_downsample=identity_downsample, 
                                  stride=stride, surv_prob=surv_prob)
          in_channels = out_channels
@@ -58,5 +60,5 @@ class IdentityResNextSeSdBlock(nn.Module):
       return x
 
 """
-name={block_name={in_channels, expansion, stride, intermediate_channels, num_residual_blocks, surv_prob}}
+name={block_name={in_channels, groups, expansion, stride, intermediate_channels, num_residual_blocks, surv_prob}}
 """
