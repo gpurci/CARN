@@ -2,7 +2,7 @@
 
 from torch import nn
 
-class SqueezeExcitation(nn.Module):
+class SqueezeExcitation2d(nn.Module):
    def __init__(self, in_channels, reduction_channels):
       super().__init__()
       self.block = nn.Sequential(
