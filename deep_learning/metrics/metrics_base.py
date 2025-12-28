@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-class Metrics(object):
+class MetricsBase(object):
    def __init__(self, name=""):
       """"""
       self.name = name
