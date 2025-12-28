@@ -1,8 +1,12 @@
 #!/usr/bin/python
 
 from torch import nn
-from layers.excitation.squeeze_excitation import *
-from layers.dropout.stochastic_depth_add import *
+
+from sys_function import * # este in root
+sys_remove_modules("layers.dropout.stochastic_depth")
+
+from layers.excitation.squeeze_excitation_2d import *
+from layers.dropout.stochastic_depth import *
 
 class IdentityResNextSeSd(nn.Module):
    def __init__(self, in_channels, intermediate_channels, groups=1, expansion=4, identity_downsample=None, stride=1, surv_prob=0.5):
@@ -41,7 +45,7 @@ class IdentityResNextSeSd(nn.Module):
       self.activ_fn = nn.SiLU(inplace=True)
       self.identity_downsample = identity_downsample
       self.se = SqueezeExcitation(intermediate_channels*expansion, intermediate_channels)
-      self.sd = StochasticDepthAdd(p=surv_prob, shape=(1, 1, 1))
+      self.sd = StochasticDepth(p=surv_prob, shape=(1, 1, 1))
 
    def reset_parameters(self):
       self.bn1.reset_parameters()
@@ -71,9 +75,10 @@ class IdentityResNextSeSd(nn.Module):
       x = self.conv3(x)
 
       x = self.se(x)
+      x = self.sd(x)
 
       if (self.identity_downsample is not None):
          identity = self.identity_downsample(identity)
 
-      x = self.sd(x, identity)  # add the identity (skip connection) and apply relu activation
+      x = x + identity  # add the identity (skip connection) and apply relu activation
       return x
