@@ -8,7 +8,7 @@ from sys_function import * # este in root
 sys_remove_modules("layers.resnet.identity_resnext_se")
 sys_remove_modules("layers.resnet.identity_conv2d_downsample")
 
-from layers.resnet.identity_resnext_se_sd import *
+from layers.resnet.identity_resnext_se import *
 from layers.resnet.identity_conv2d_downsample import *
 
 class IdentityResNextSeBlock(nn.Module):

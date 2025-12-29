@@ -43,7 +43,7 @@ class IdentityResNextSe(nn.Module):
 
       self.activ_fn = nn.SiLU(inplace=True)
       self.identity_downsample = identity_downsample
-      self.se = SqueezeExcitation(intermediate_channels*expansion, intermediate_channels)
+      self.se = SqueezeExcitation2d(intermediate_channels*expansion, intermediate_channels)
 
    def reset_parameters(self):
       self.bn1.reset_parameters()

@@ -44,7 +44,7 @@ class IdentityResNextSeSd(nn.Module):
 
       self.activ_fn = nn.SiLU(inplace=True)
       self.identity_downsample = identity_downsample
-      self.se = SqueezeExcitation(intermediate_channels*expansion, intermediate_channels)
+      self.se = SqueezeExcitation2d(intermediate_channels*expansion, intermediate_channels)
       self.sd = StochasticDepth(p=surv_prob, shape=(1, 1, 1))
 
    def reset_parameters(self):
