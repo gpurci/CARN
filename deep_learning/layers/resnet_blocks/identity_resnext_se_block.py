@@ -32,6 +32,7 @@ class IdentityResNextSeBlock(nn.Module):
       stride      = conf.get("stride", 1)
       groups      = conf.get("groups", 1)
       intermediate_channels = conf.get("intermediate_channels", None)
+      stimulation_layer     = conf.get("stimulation_layer",     None)
       num_residual_blocks   = conf.get("num_residual_blocks", 1)
       out_channels = intermediate_channels * expansion
       #print("name {}, in_channels {}, out_channels {}, expansion {}, stride {}, intermediate_channels {}, num_residual_blocks {}".format(key, in_channels, out_channels, expansion, stride, intermediate_channels, num_residual_blocks))
@@ -48,6 +49,9 @@ class IdentityResNextSeBlock(nn.Module):
          stride = 1
          block_name = "{}_{}".format(key, idx)
          layers.append((block_name, layer))
+      if (stimulation_layer is not None):
+         block_name = "{}_{}".format(key, "stimulation")
+         layers.append((block_name, stimulation_layer))
       return layers
 
    def reset_parameters(self):
