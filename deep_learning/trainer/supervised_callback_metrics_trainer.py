@@ -138,6 +138,7 @@ class SupervisedCallbackMetricsTrainer():
    def run(self, train_dl, val_dl, epochs: int, save_path:str):
       print(f"Running {epochs} epochs")
       for epoch in range(epochs):
+         torch.cuda.empty_cache()
          self.train(train_dl)
          train_logs = self.metrics.logs()
          self.callbacks.on_train_end(train_logs)

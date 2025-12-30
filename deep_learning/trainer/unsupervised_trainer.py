@@ -114,6 +114,7 @@ class UnsupervisedTrainer():
         print(f"Running {epochs} epochs")
         with tqdm(range(epochs), desc="Training") as pbar:
             for _ in pbar:
+                torch.cuda.empty_cache()
                 tr_loss = self.train(train_dl)
                 va_loss = self.val(val_dl)
                 if (va_loss < self.best_va_loss):
