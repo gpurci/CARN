@@ -5,16 +5,16 @@ from torch import nn
 from collections import OrderedDict
 
 from sys_function import * # este in root
-sys_remove_modules("layers.resnet.identity_resnext_se")
+sys_remove_modules("layers.resnet.se_identity_resnext")
 sys_remove_modules("layers.resnet.identity_conv2d_downsample")
 
-from layers.resnet.identity_resnext_se import *
+from layers.resnet.se_identity_resnext import *
 from layers.resnet.identity_conv2d_downsample import *
 
-class IdentityResNextSeBlock(nn.Module):
+class SeStIdentityResNextBlock(nn.Module):
    def __init__(self, name, **conf):
       super().__init__()
-      self.name = name
+      self.name  = name
       self.block = self._unpack_block(**conf)
 
    def _unpack_block(self, **conf):
@@ -41,7 +41,7 @@ class IdentityResNextSeBlock(nn.Module):
          identity_downsample = None
          if ((stride != 1) or (in_channels != out_channels)):
             identity_downsample = IdentityConv2dDownSample(in_channels, out_channels, stride=stride)
-         layer = IdentityResNextSe(in_channels, intermediate_channels, 
+         layer = SeIdentityResNext(in_channels, intermediate_channels, 
                                  groups=groups,
                                  expansion=expansion, identity_downsample=identity_downsample, 
                                  stride=stride)
@@ -56,7 +56,8 @@ class IdentityResNextSeBlock(nn.Module):
 
    def reset_parameters(self):
       for layer in self.block:
-         layer.reset_parameters()
+         if (hasattr(layer, "reset_parameters")):
+            layer.reset_parameters()
 
    def forward(self, x):
       x = self.block(x)
