@@ -11,5 +11,9 @@ def freeze_layer(layer):
    for param in layer.parameters():
       param.requires_grad = False
 
+def unfreeze_layer(layer):
+   for param in layer.parameters():
+      param.requires_grad = True
+
 def is_layer_frozen(layer):
    return all(not p.requires_grad for p in layer.parameters())
