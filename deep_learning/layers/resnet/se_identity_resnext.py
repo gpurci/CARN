@@ -7,7 +7,7 @@ sys_remove_modules("layers.excitation.squeeze_excitation_2d")
 
 from layers.excitation.squeeze_excitation_2d import *
 
-class IdentityResNextSe(nn.Module):
+class SeIdentityResNext(nn.Module):
    def __init__(self, in_channels, intermediate_channels, groups=1, expansion=4, identity_downsample=None, stride=1):
       super().__init__()
       self.bn1 = nn.BatchNorm2d(in_channels)
