@@ -5,33 +5,29 @@ from torch import nn
 import warnings
 
 from sys_function import * # este in root
-sys_remove_modules("layers.resnet_blocks.identity_resnet_block")
-sys_remove_modules("layers.resnet_blocks.identity_resnext_se_block")
-sys_remove_modules("layers.inputs.input_by_stride")
+sys_remove_modules("layers.inputs.resnet_input")
+sys_remove_modules("layers.resnet_blocks.se_st_identity_resnext_block")
 
-from layers.resnet_blocks.identity_resnet_block import *
-from layers.resnet_blocks.identity_resnext_se_block import *
-from layers.inputs.input_by_stride import *
+from layers.inputs.resnet_input import *
+from layers.resnet_blocks.se_st_identity_resnext_block import *
 
-class ResNextSe(nn.Module):
+class SeStResNext(nn.Module):
    def __init__(self, name, initializer=None, **conf):
       super().__init__()
       self.name = name
       self.input  = self._unpack_input(**conf)
-      self.body   = IdentityResNetBlock("body", **conf)
-      self.decode = IdentityResNextSeBlock("decode", **conf)
+      self.body   = SeStIdentityResNextBlock("body", **conf)
+      self.decode = SeStIdentityResNextBlock("decode", **conf)
       self.avgpool = nn.AdaptiveAvgPool2d(1)
-      in_features, out_features = conf.get("Output")
+      in_features, out_features = conf.get("output")
       self.fc      = nn.Linear(in_features, out_features)
 
    def _unpack_input(self, **conf):
-      tmp_conf = conf.get("Input")
+      tmp_conf = conf.get("input")
       img_channels = tmp_conf.get("img_channels")
       out_channels = tmp_conf.get("out_channels")
-      kernel_size = tmp_conf.get("kernel_size")
-      stride = tmp_conf.get("stride")
 
-      layer = InputStride(img_channels, out_channels, kernel_size, stride)
+      layer  = ResNetInput(img_channels, out_channels)
       return layer
 
    def reset_parameters(self, reset_layers=None):
@@ -41,7 +37,7 @@ class ResNextSe(nn.Module):
                layer = getattr(self, layer_name)
                layer.reset_parameters()
             else:
-               warnings.warn("\n\nW 'ResNextSeSd' do not has, layer name: '{}'\n\n".format(layer_name))
+               warnings.warn("\n\nW 'SeStResNext' do not has, layer name: '{}'\n\n".format(layer_name))
       else:
          self.input.reset_parameters()
          self.body.reset_parameters()
