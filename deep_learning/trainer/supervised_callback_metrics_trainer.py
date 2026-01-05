@@ -20,7 +20,6 @@ class SupervisedCallbackMetricsTrainer():
          callbacks:list = [],
          metrics:dict = {},
          type_compile="normal",
-         disable_tqdm: bool = False, 
          transforms=None, 
          all_transforms=None, 
          lr_scheduler=None,
@@ -52,7 +51,6 @@ class SupervisedCallbackMetricsTrainer():
       self.transforms     = transforms
       self.all_transforms = all_transforms
       # 
-      self.disable_tqdm = disable_tqdm
       self.best_va_acc  = 0.0
       # 
       self.lr_scheduler = lr_scheduler
@@ -76,7 +74,7 @@ class SupervisedCallbackMetricsTrainer():
       self.model.train()
 
       for batch, (data, target) in enumerate(train_ds, 0):
-         self.callbacks.on_train_batch_begin(batch, None)
+         #self.callbacks.on_train_batch_begin(batch, None)
          # We must move the data to the same device as the model
          # We can also use non_blocking=True to speed up the transfer for large tensors
          # Works when using pin_memory=True. For more details, check the references for pinning memory.
@@ -91,8 +89,6 @@ class SupervisedCallbackMetricsTrainer():
             data, target = self.all_transforms(data, target)
          predicted, loss = self.step(data, target)
 
-         if (self.lr_scheduler is not None):
-            self.lr_scheduler.step()
          # This metric is actually an approximation of an accuracy, we are checking whether the dominant class
          # predicted by the model is also equal to the dominant soft label
          # The reason we are moving the data from device back to CPU is because these calculations are usually
@@ -102,7 +98,7 @@ class SupervisedCallbackMetricsTrainer():
          target    = target.detach().cpu().argmax(dim=1)
          loss = float(loss.item())
          logs = self.metrics(target, predicted, loss=loss)
-         self.callbacks.on_train_batch_end(batch, logs)
+         #self.callbacks.on_train_batch_end(batch, logs)
 
    # Here we use the inference_mode. We are telling pytorch we are doing just inference, we don't need to track
    # tensor operations with the Autograd engine for automatic differentiation. This is also what torch.no_grad() does.
@@ -120,7 +116,7 @@ class SupervisedCallbackMetricsTrainer():
       self.model.eval()
 
       for batch, (data, target) in enumerate(val_ds, 0):
-         self.callbacks.on_test_batch_begin(batch, None)
+         #self.callbacks.on_test_batch_begin(batch, None)
          # go to device
          data   = data.to(self.device, non_blocking=True)
          target = target.to(self.device, non_blocking=True)
@@ -133,9 +129,9 @@ class SupervisedCallbackMetricsTrainer():
          predicted = predicted.detach().cpu().argmax(dim=1)
          target    = target.detach().cpu()
          logs = self.metrics(target, predicted, "val_", loss=loss)
-         self.callbacks.on_test_batch_end(batch, logs)
+         #self.callbacks.on_test_batch_end(batch, logs)
 
-   def run(self, train_dl, val_dl, epochs: int, save_path:str):
+   def run(self, train_dl, val_dl, epochs: int):
       print(f"Running {epochs} epochs")
       for epoch in range(epochs):
          torch.cuda.empty_cache()
@@ -147,6 +143,8 @@ class SupervisedCallbackMetricsTrainer():
          self.callbacks.on_test_end(val_logs)
          train_logs.update(val_logs)
          self.callbacks.on_epoch_end(epoch, train_logs)
+         if (self.lr_scheduler is not None):
+            self.lr_scheduler.step()
       # We use tqdm to have a progress bar for the epochs. We disable inner progress bars on jupyter notebooks,
       # because either they produce a lot of output, or disable loading the notebook on GitHub.
       # If you run this script on a terminal, you can enable the inner progress bars.
@@ -175,7 +173,7 @@ class SupervisedCallbackMetricsTrainer():
       correct = 0
       total_loss = 0
 
-      for data, target in tqdm(eval_dl, desc="Validation", leave=False, disable=self.disable_tqdm):  # Disable on notebook
+      for data, target in tqdm(eval_dl, desc="Validation", leave=False):  # Disable on notebook
          # go to device
          data   = data.to(self.device, non_blocking=True)
          target = target.to(self.device, non_blocking=True)
