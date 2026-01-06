@@ -21,7 +21,7 @@ sys_remove_modules("callback.callback")
 
 #from callback.callback import *
 
-class RunTTA():
+class TTATest():
    def __init__(self, model, dataset):
       self.model   = model
       self.dataset = dataset
@@ -123,7 +123,6 @@ class RunTTA():
          mirroring: performs a horizontal flip for the input images, doing an additional inference pass
          translate: performs 8 translations of the input images, doing 8 additional inference passes
          mirroring_and_translate
-
       """
       total = 0
       correct = 0
@@ -138,7 +137,6 @@ class RunTTA():
       return round(correct / total, 4)
 
    def inference(self, model, batches, device: torch.device, dtype: torch.dtype, model_type: str) -> Tuple[float, float]:
-
       """We use the automated mixed precision module to automatically cast to our desired data type. 
       We measure the accuracy and the elapsed time of the configuration."""
 
@@ -167,7 +165,7 @@ class RunTTA():
 
       with tqdm(total=len(devices) * len(dtypes) * len(model_types) * len(tta_types), desc="Speed experiments") as tbar:
          for device, dtype, tta_type in product(devices, dtypes, tta_types):
-            if device is None:
+            if (device is None):
                tbar.update(len(model_types))
                continue
             speed_results = PrettyTable()
