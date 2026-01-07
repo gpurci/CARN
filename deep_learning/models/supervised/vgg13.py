@@ -54,8 +54,15 @@ class VGG13(nn.Module):
 
          # Classifier
          nn.Flatten(),
-         nn.Linear(512, num_classes)
       )
+      self.fc = nn.Linear(512, num_classes)
+
+   def reset_parameters(self):
+      self.fc.reset_parameters()
+      for layer in self.layers:
+         if (hasattr(layer, "reset_parameters")):
+            layer.reset_parameters()
 
    def forward(self, x: Tensor) -> Tensor:
-      return self.layers(x)
+      x = self.layers(x)
+      return self.fc(x)
