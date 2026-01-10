@@ -9,8 +9,8 @@ class LabelSmoothing(v2.Transform):
         super().__init__()
         assert (num_classes > 0), "Error: num_classes '{}' should be greater than '0'".format(num_classes)
         self.num_classes = num_classes
-        self.smooth_size = smooth_size
         self.on_value = 1 - smooth_size
+        self.smooth_size = smooth_size
         self.dtype = dtype
         
     def __call__(self, x, y):
