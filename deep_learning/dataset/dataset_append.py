@@ -25,7 +25,7 @@ class DatasetAppend(Dataset):
       self.task_size = self.inputs.shape[0]
 
    def __init_virtual_dataset(self, append_datasets):
-      if (append_dataset is not None):
+      if (append_datasets is not None):
          inputs  = [self.inputs]
          targets = [self.targets]
          self.num_classes = self.task_num_classes
@@ -37,7 +37,7 @@ class DatasetAppend(Dataset):
             self.inputs  = np.concatenate(inputs,  axis=0)
             self.targets = np.concatenate(targets, axis=0)
 
-   def __init_virtual_size(self, percent_from)
+   def __init_virtual_size(self, percent_from):
       # dataset number classes
       assert (percent_from >= 0), "Error: percent_from '{}' should be greater equal to '0'".format(percent_from)
       assert (percent_from <= 1), "Error: percent_from '{}' should be less equal to '1'".format(percent_from)

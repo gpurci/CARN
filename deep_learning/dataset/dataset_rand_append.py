@@ -25,7 +25,7 @@ class DatasetRandAppend(Dataset):
      assert (self.task_num_classes > 0), "Error: num_classes '{}' should be greater than '0'".format(self.task_num_classes)
      self.task_size = self.inputs.shape[0]
 
-   def __init_virtual_size(self, percent_from)
+   def __init_virtual_size(self, percent_from):
       # dataset number classes
       assert (percent_from >= 0), "Error: percent_from '{}' should be greater equal to '0'".format(percent_from)
       assert (percent_from <= 1), "Error: percent_from '{}' should be less equal to '1'".format(percent_from)
