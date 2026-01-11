@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-import torch
 from torch.utils.data import Dataset
 import numpy as np
 
@@ -25,6 +24,7 @@ class AppendHelpDatasets(Dataset):
       self.targets_shift = [0]
       self.help_ds_size  = [self.main_ds_size]
       self.ds_name = ["main"]
+      self.main_num_classes = self.num_classes
 
    def __init_help_datasets(self, help_metads):
       if (help_metads is not None):
@@ -58,11 +58,17 @@ class AppendHelpDatasets(Dataset):
       return self.size
 
    def __str__(self):
+      if ((self.num_classes-self.main_num_classes) == 0):
+         size_per_class = 0
+      else:
+         size_per_class = self.VIRTUAL_SIZE/(self.num_classes-self.main_num_classes)
       str_info = """AddHelpDatasets:
    size: {},
    num_classes : {},
    virtual size: {},
-   size per help dataset: {}""".format(self.size, self.num_classes, self.VIRTUAL_SIZE, self.SIZE_PER_HELP)
+   size per help dataset: {},
+   size per help class:   {},
+   """.format(self.size, self.num_classes, self.VIRTUAL_SIZE, self.SIZE_PER_HELP, size_per_class)
       # 
       for data_reader, target_shift, ds_size, name in zip(self.datasets, self.targets_shift, self.help_ds_size, self.ds_name):
          str_info += """
