@@ -21,12 +21,13 @@ sys_remove_modules("callback.callback")
 
 #from callback.callback import *
 
-class TTATest():
-   def __init__(self, model, dataset):
+class TTA():
+   def __init__(self, model, dataset, in_shape=None):
       self.model   = model
       self.dataset = dataset
+      self.in_shape= in_shape
 
-   def selectModelType(self, device: torch.device, model_type: str, in_shape=None):
+   def selectModelType(self, device: torch.device, model_type: str):
       """This method creates a model on a device and prepares it for serving. 
       Depending on the optimization type, the model is optimized using different TorchScript jit utilities, 
       or even compiled using torch.compile.
@@ -40,11 +41,11 @@ class TTATest():
       elif (model_type == "scripted"):
          model = torch.jit.script(model)
       elif (model_type == "traced"):
-         if (in_shape is not None):
-            data  = torch.rand(in_shape, device=device)
+         if (self.in_shape is not None):
+            data  = torch.rand(self.in_shape, device=device)
             model = torch.jit.trace(model, data)
          else:
-            raise RuntimeError("The 'in_shape' is None '{}'".format(in_shape))
+            raise RuntimeError("The 'in_shape' is None '{}'".format(self.in_shape))
       elif (model_type == "frozen"):
          model = torch.jit.freeze(torch.jit.script(model))
       elif (model_type == "optimized_for_inference"):
@@ -104,15 +105,21 @@ class TTATest():
             predicted += model(hflip(aux))
       return predicted
 
+   @staticmethod
+   def __mirroringTTA(model, data):
+      predicted = model(data)
+      predicted += model(hflip(data))
+      return predicted
+
    def __select_tta_inference(self, tta_type: str):
       if (tta_type == "mirroring"):
-         self.__tta_inference = RunTTA.__mirroringTTA
+         self.__tta_inference = TTA.__mirroringTTA
       elif (tta_type == "translate"):
-         self.__tta_inference = RunTTA.__translateTTA
+         self.__tta_inference = TTA.__translateTTA
       elif (tta_type == "mirroring_and_translate"):
-         self.__tta_inference = RunTTA.__mirroring_and_translateTTA
+         self.__tta_inference = TTA.__mirroring_and_translateTTA
       else:
-         self.__tta_inference = RunTTA.__noTTA
+         self.__tta_inference = TTA.__noTTA
 
    @timed(stdout=False, return_time=True, use_seconds=True)
    def tta_inference(self, model, batches, device: torch.device) -> float:
@@ -171,10 +178,9 @@ class TTATest():
             speed_results = PrettyTable()
             speed_results.field_names = ["Device", "Dtype", "TTA Type", "Model Type", "Accuracy", "Elapsed"]
 
-            in_shape = 
 
             for model_type in model_types:
-               model = self.selectModelType(device, model_type, in_shape=in_shape)
+               model = self.selectModelType(device, model_type)
                self.__select_tta_inference(tta_type)
                accuracy, elapsed = self.inference(model, self.dataset, device, dtype, model_type)
                speed_results.add_row([device, dtype, tta_type, model_type, accuracy, elapsed])
