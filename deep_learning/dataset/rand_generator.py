@@ -11,7 +11,7 @@ class RandGenerator(object):
 
    def __init_rand_target(num_classes):
       if (num_classes == 1):
-         self.target_gen = lambda : 0
+         self.target_gen = lambda : np.uint16(0)
       else:
          self.target_gen = self.__rand_target_gen
 
