@@ -15,17 +15,24 @@ class RowDataset(Dataset):
 
    def __getitem__(self, idx: int):
       inputs  = self.inputs[ idx].copy()
-      outputs = self.targets[idx]
+      targets = self.targets[idx]
       # We clone the data here, otherwise the runtime transforms might corrupt our data. They really do!
       # You should never trust your users, even if they are yourself.
-      return inputs, outputs.astype(np.int64)
+      return inputs, targets.astype(np.int64)
 
    def __str__(self):
       str_info = """RowDataset:
    name: {},
    size: {},
    num_classes : {},
-   shape: {}""".format(self.name, self.inputs.shape[0], self.targets.max()+1, self.inputs.shape)
+   shape: {},
+   in min: {},
+   in max: {},
+   out min: {},
+   out max: {},""".format(self.name, self.inputs.shape[0], self.targets.max()+1, 
+            self.inputs.shape, self.inputs.min(), self.inputs.max(), self.targets.min(), self.targets.max(),
+
+      )
       return str_info
 
    @staticmethod
