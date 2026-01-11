@@ -55,7 +55,7 @@ class VGG13(nn.Module):
          # Classifier
          nn.Flatten(),
       )
-      self.fc = nn.Linear(512, num_classes)
+      self.fc = nn.Linear(512, int(num_classes))
 
    def reset_parameters(self):
       self.fc.reset_parameters()
