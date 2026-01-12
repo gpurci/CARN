@@ -138,6 +138,7 @@ class Trainer():
       print(f"Running {epochs} epochs")
       with tqdm(range(epochs), desc="Training") as pbar:
          for _ in pbar:
+            torch.cuda.empty_cache()
             tr_loss, tr_acc = self.train(train_dl)
             va_loss, va_acc = self.val(val_dl)
             print({"tr_loss":tr_loss, "tr_acc":tr_acc, "va_loss":va_loss, "va_acc":va_acc})

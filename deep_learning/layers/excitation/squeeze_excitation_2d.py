@@ -15,7 +15,8 @@ class SqueezeExcitation2d(nn.Module):
 
    def reset_parameters(self):
       for layer in self.block:
-         layer.reset_parameters()
+         if (hasattr(layer, "reset_parameters")):
+            layer.reset_parameters()
 
    def forward(self, x):
       return x*self.block(x)
