@@ -8,6 +8,7 @@ __pycache__/
 *.pyd
 *.py[codz]
 *.npy
+*.zip
 *$py.class
 logs/
 out/
