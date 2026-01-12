@@ -40,15 +40,13 @@ class SupervisedCallbackMetricsTrainer():
       self.selectModelType(model_type)
       # 
       self.criterion = criterion.to(self.device)  # Required for some loss functions
-      self.optimizer = optimizer
       # 
       self.transforms     = transforms
       self.all_transforms = all_transforms
-      # 
-      self.lr_scheduler = lr_scheduler
       #
       self.callbacks = CallbacksList(callbacks)
       self.metrics   = MetricsList(metrics)
+      self.setOptimizer(optimizer, lr_scheduler)
 
    def selectModelType(self, model_type):
       if   (model_type == "raw"):
@@ -75,8 +73,6 @@ class SupervisedCallbackMetricsTrainer():
       predicted = self.model(inputs)
       loss = self.criterion(predicted, targets)
       loss.backward()
-      self.optimizer.step()
-      self.optimizer.zero_grad()
       return predicted, loss
 
    def train(self, train_ds):
@@ -96,7 +92,11 @@ class SupervisedCallbackMetricsTrainer():
             inputs = self.transforms(inputs)
          if (self.all_transforms is not None):
             inputs, targets = self.all_transforms(inputs, targets)
+
          predicted, loss = self.step(inputs, targets)
+         self.optimizer.step()
+         self.optimizer.zero_grad()
+         self.model.zero_grad(set_to_none=True)
 
          # This metric is actually an approximation of an accuracy, we are checking whether the dominant class
          # predicted by the model is also equal to the dominant soft label
