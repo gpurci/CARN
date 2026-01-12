@@ -1,0 +1,15 @@
+
+mammography cancer segmentation models pytorch 
+
+
+https://www.kaggle.com/code/abeerabdelnasser/breast-cancer/input
+https://www.nature.com/articles/sdata2017177
+https://www.kaggle.com/datasets/awsaf49/cbis-ddsm-breast-cancer-image-dataset/data
+https://github.com/xiaoguo1995/Breast_Cancer_Segmentation?tab=readme-ov-file
+https://medium.com/swlh/breast-cancer-classification-with-pytorch-and-deep-learning-52dd62362157
+https://www.nature.com/articles/s41598-024-72712-5
+https://arxiv.org/pdf/1906.03720v1
+https://arxiv.org/pdf/1505.04597v1
+https://pytorch.org/hub/mateuszbuda_brain-segmentation-pytorch_unet/
+https://github.com/MrBlankness/LightM-UNet/blob/master/README.md
+https://arxiv.org/pdf/2211.14830v1
