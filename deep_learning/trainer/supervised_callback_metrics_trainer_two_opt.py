@@ -1,8 +1,9 @@
 #!/usr/bin/python
 
+import os
 import torch
-from tqdm import tqdm
 from torch import nn
+import warnings
 
 from sys_function import * # este in root
 sys_remove_modules("callback.callback_list")
@@ -14,16 +15,15 @@ from metrics.metrics_list import *
 class SupervisedCallbackMetricsTrainerTwoOpt():
    def __init__(self,
          model: nn.Module,
-         optimizer: torch.optim.Optimizer,
+         optimizers: torch.optim.Optimizer,
          criterion: nn.Module,
          device:"cuda",
          callbacks:list = [],
          metrics:dict = {},
-         type_compile="normal",
-         disable_tqdm: bool = False, 
+         model_type="raw",
          transforms=None, 
          all_transforms=None, 
-         lr_scheduler=None,
+         lr_schedulers=None,
    ):
       self.device = device
       print(f"Using device: {self.device}")
@@ -37,77 +37,75 @@ class SupervisedCallbackMetricsTrainerTwoOpt():
 
       # We don't need to shuffle the validation set
       self.model = model.to(self.device)  # The model must be on the same device
-      if   (type_compile == "jit"):
-         # torch.jit.script is still a very good option, often faster than torch.compile, especially on windows
-         self.model = torch.jit.script(model)
-      elif (type_compile == "compile"):
-         # This compiles the model. See https://docs.pytorch.org/tutorials/intermediate/torch_compile_tutorial.html
-         self.model.compile()
-         # This compiles the step function
-         self.step = torch.compile(self.step)
+      self.selectModelType(model_type)
       # 
       self.criterion = criterion.to(self.device)  # Required for some loss functions
       # 
       self.transforms     = transforms
       self.all_transforms = all_transforms
-      # 
-      self.disable_tqdm = disable_tqdm
-      self.best_va_acc  = 0.0
       #
       self.callbacks = CallbacksList(callbacks)
       self.metrics   = MetricsList(metrics)
-      self.setOptimizer(optimizer, lr_scheduler)
+      self.setOptimizers(optimizers, lr_schedulers)
 
-   def setOptimizer(self, optimizer, lr_scheduler=None):
-      self.optimizer    = optimizer
-      self.lr_scheduler = lr_scheduler
+   def selectModelType(self, model_type):
+      if   (model_type == "raw"):
+         pass
+      elif (model_type == "scripted"):
+         # torch.jit.script is still a very good option, often faster than torch.compile, especially on windows
+         self.model = torch.jit.script(self.model)
+      elif (model_type == "compiled"):
+         if (os.name == "nt"):
+            warnings.warn("\n\ntorch.compile is not supported on Windows. Try Linux or WSL instead.\n\n")
+         else: # TO DO: check if is linux
+            # This compiles the model. See https://docs.pytorch.org/tutorials/intermediate/torch_compile_tutorial.html
+            self.model = torch.compile(self.model)
+      else:
+         raise RuntimeError("std::unreachable")
 
-   def step(self, data: torch.Tensor, target: torch.Tensor):
-      predicted = self.model(data)
-      loss = self.criterion(predicted, target)
-      loss.backward()
-      self.optimizer.step()
-      self.optimizer.zero_grad()
-      #
-      predicted = self.model(data)
-      loss = self.criterion(predicted, target)
-      loss.backward()
-      self.optimizer.step()
-      self.optimizer.zero_grad()
-      return predicted, loss
+   def setOptimizers(self, optimizers, lr_schedulers=None):
+      self.optimizers    = optimizers
+      self.lr_schedulers = lr_schedulers
 
    def train(self, train_ds):
       self.model.train()
 
-      for batch, (data, target) in enumerate(train_ds, 0):
-         self.callbacks.on_train_batch_begin(batch, None)
-         # We must move the data to the same device as the model
+      for batch, (inputs, targets) in enumerate(train_ds, 0):
+         #self.callbacks.on_train_batch_begin(batch, None)
+         # We must move the dataset to the same device as the model
          # We can also use non_blocking=True to speed up the transfer for large tensors
          # Works when using pin_memory=True. For more details, check the references for pinning memory.
          # but this is useful only for pinned memory transfers (CPU-to-GPU)
          # In most cases, the improvement is negligible
-         data   = data.to(self.device, non_blocking=True)
-         target = target.to(self.device, non_blocking=True)
+         inputs  = inputs.to(self.device,  non_blocking=True)
+         targets = targets.to(self.device, non_blocking=True)
 
          if (self.transforms is not None):
-            data = self.transforms(data)
+            inputs = self.transforms(inputs)
          if (self.all_transforms is not None):
-            data, target = self.all_transforms(data, target)
+            inputs, targets = self.all_transforms(inputs, targets)
          
-         predicted, loss = self.step(data, target)
+         predicted = self.model(inputs)
+         loss = self.criterion(predicted, targets)
+         loss.backward()
+         for opt in self.optimizers:
+            opt.step()
+            opt.zero_grad() # To DO: sterge si verifica
+         self.model.zero_grad(set_to_none=True)
 
-         if (self.lr_scheduler is not None):
-            self.lr_scheduler.step()
+         if (self.lr_schedulers is not None):
+            for lr_shed in self.lr_schedulers:
+               lr_shed.step()
          # This metric is actually an approximation of an accuracy, we are checking whether the dominant class
          # predicted by the model is also equal to the dominant soft label
-         # The reason we are moving the data from device back to CPU is because these calculations are usually
+         # The reason we are moving the dataset from device back to CPU is because these calculations are usually
          # faster on CPU for small batch sizes
          # We use detach because we tell the autograd engine to not track the gradients for predicted anymore
          predicted = predicted.detach().cpu().argmax(dim=1)
-         target    = target.detach().cpu().argmax(dim=1)
+         targets   = targets.detach().cpu().argmax(dim=1)
          loss = float(loss.item())
-         logs = self.metrics(target, predicted, loss=loss)
-         self.callbacks.on_train_batch_end(batch, logs)
+         logs = self.metrics(targets, predicted, loss=loss)
+         #self.callbacks.on_train_batch_end(batch, logs)
 
    # Here we use the inference_mode. We are telling pytorch we are doing just inference, we don't need to track
    # tensor operations with the Autograd engine for automatic differentiation. This is also what torch.no_grad() does.
@@ -124,29 +122,29 @@ class SupervisedCallbackMetricsTrainerTwoOpt():
    def val(self, val_ds):
       self.model.eval()
 
-      for batch, (data, target) in enumerate(val_ds, 0):
-         self.callbacks.on_test_batch_begin(batch, None)
+      for batch, (inputs, targets) in enumerate(val_ds, 0):
+         #self.callbacks.on_test_batch_begin(batch, None)
          # go to device
-         data   = data.to(self.device, non_blocking=True)
-         target = target.to(self.device, non_blocking=True)
+         inputs  = inputs.to(self.device,  non_blocking=True)
+         targets = targets.to(self.device, non_blocking=True)
 
-         predicted = self.model(data)
-         loss = self.criterion(predicted, target).item()
+         predicted = self.model(inputs, whiten_bias_grad=False)
+         loss = self.criterion(predicted, targets).item()
 
-         # Here we don't need to argmax the target, because we have hard labels. We don't use DA during validation.
+         # Here we don't need to argmax the targets, because we have hard labels. We don't use DA during validation.
          # We don't need to detach, because we are already in inference_mode
          predicted = predicted.detach().cpu().argmax(dim=1)
-         target    = target.detach().cpu()
-         logs = self.metrics(target, predicted, "val_", loss=loss)
-         self.callbacks.on_test_batch_end(batch, logs)
+         targets   = targets.detach().cpu()
+         logs = self.metrics(targets, predicted, "val_", loss=loss)
+         #self.callbacks.on_test_batch_end(batch, logs)
 
-   def run(self, train_dl, val_dl, epochs: int, save_path:str):
+   def run(self, train_dl, val_dl, epochs: int):
       print(f"Running {epochs} epochs")
       for epoch in range(epochs):
+         self.callbacks.on_epoch_begin(epoch, None)
          torch.cuda.empty_cache()
          self.train(train_dl)
          train_logs = self.metrics.logs()
-         print("train_logs", train_logs)
          self.callbacks.on_train_end(train_logs)
          self.val(val_dl)
          val_logs = self.metrics.logs()
@@ -157,7 +155,7 @@ class SupervisedCallbackMetricsTrainerTwoOpt():
       # because either they produce a lot of output, or disable loading the notebook on GitHub.
       # If you run this script on a terminal, you can enable the inner progress bars.
       # Some more details about efficiency:
-      #  * Using pin_memory=True in the DataLoader usually increases the data transfer speed from
+      #  * Using pin_memory=True in the DataLoader usually increases the dataset transfer speed from
       #    CPU RAM to GPU RAM, using pinned memory. More details in the official documentation.
       #    The downside is that pinned memory is a limited resource, and allocating too much of it can lead to
       #    system instability. Therefore, monitor your system when using pin_memory=True.
@@ -181,20 +179,20 @@ class SupervisedCallbackMetricsTrainerTwoOpt():
       correct = 0
       total_loss = 0
 
-      for data, target in tqdm(eval_dl, desc="Validation", leave=False, disable=self.disable_tqdm):  # Disable on notebook
+      for inputs, targets in tqdm(eval_dl, desc="Validation", leave=False):  # Disable on notebook
          # go to device
-         data   = data.to(self.device, non_blocking=True)
-         target = target.to(self.device, non_blocking=True)
+         inputs  = inputs.to(self.device,  non_blocking=True)
+         targets = targets.to(self.device, non_blocking=True)
 
-         predicted = self.model(data)
-         loss = self.criterion(predicted, target).item()
+         predicted = self.model(inputs)
+         loss = self.criterion(predicted, targets).item()
 
-         # Here we don't need to argmax the target, because we have hard labels. We don't use DA during validation.
+         # Here we don't need to argmax the targets, because we have hard labels. We don't use DA during validation.
          # We don't need to detach, because we are already in inference_mode
          predicted = predicted.detach().cpu().argmax(dim=1)
-         target    = target.detach().cpu()
-         correct += predicted.eq(target).sum().item()
-         total   += data.size(0)
+         targets   = targets.detach().cpu()
+         correct += predicted.eq(targets).sum().item()
+         total   += inputs.size(0)
          total_loss += loss
 
       return total_loss / total, correct / total
