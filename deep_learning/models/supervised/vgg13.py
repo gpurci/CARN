@@ -3,12 +3,12 @@
 from torch import nn, Tensor
 
 class VGG13(nn.Module):
-   def __init__(self, num_classes):
+   def __init__(self, in_size, num_classes):
       super().__init__()
 
       self.layers = nn.Sequential(
          # Block 1
-         nn.Conv2d(3, 64, kernel_size=3, padding=1),
+         nn.Conv2d(int(in_size), 64, kernel_size=3, padding=1),
          nn.BatchNorm2d(64),
          nn.ReLU(inplace=True),
          nn.Conv2d(64, 64, kernel_size=3, padding=1),
