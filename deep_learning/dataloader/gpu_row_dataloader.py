@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+from math import ceil
 
 import torch
 from torch.utils.data import Dataset
@@ -31,8 +32,24 @@ class GpuRowDataLoader():
          assert k in ["flip", "translate"], "Unrecognized key: %s" % k
 
       self.batch_size = batch_size
-      self.drop_last = train
+      self.drop_last  = train
       self.shuffle = train
+      self.num_classes = self.labels.max()+1
+      self.device = None
+      self.setWorkMode("basic")
+
+   def setWorkMode(self, work_mode):
+      self.device = self.labels.device
+      if (work_mode == "warmup"):
+         self.labels_work = self.__warmup
+      else:
+         self.labels_work = self.__basic
+
+   def __warmup(self, labels):
+      return torch.randint(0, self.num_classes, size=(len(labels),), device=self.device)
+
+   def __basic(self, labels):
+      return labels
 
    def __len__(self):
       return len(self.images)//self.batch_size if self.drop_last else ceil(len(self.images)/self.batch_size)
@@ -65,7 +82,7 @@ class GpuRowDataLoader():
       indices = (torch.randperm if self.shuffle else torch.arange)(len(images), device=images.device)
       for i in range(len(self)):
          idxs = indices[i*self.batch_size:(i+1)*self.batch_size]
-         yield (images[idxs], self.labels[idxs])
+         yield (images[idxs], self.labels_work(self.labels[idxs]))
 
 def batch_flip_lr(inputs):
    flip_mask = (torch.rand(len(inputs), device=inputs.device) < 0.5).view(-1, 1, 1, 1)
