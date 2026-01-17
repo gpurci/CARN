@@ -64,7 +64,7 @@ class ApplyWhiten2d(nn.Module):
       eigenvectors_scaled = eigenvectors / torch.sqrt(eigenvalues + eps)
       self.whiten.weight.data[:] = torch.cat((eigenvectors_scaled, -eigenvectors_scaled))
 
-   def forward(self, x, whiten_bias_grad=True):
+   def forward(self, x, whiten_bias_grad=False):
       b = self.whiten.bias
       b_used = b if whiten_bias_grad else b.detach()
       b_used = b_used.to(dtype=x.dtype)
