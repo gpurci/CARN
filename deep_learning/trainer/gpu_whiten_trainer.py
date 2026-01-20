@@ -2,7 +2,7 @@
 
 import os
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from torch import nn
 import warnings
 
@@ -23,6 +23,7 @@ class GPUWhitenTrainer():
             transforms=None, 
             all_transforms=None, 
             lr_schedulers=None,
+            whiten_bias_train_epochs=5,
          ):
       self.device = device
       print(f"Using device: {self.device}")
@@ -48,6 +49,8 @@ class GPUWhitenTrainer():
       # 
       self.metrics = MetricsList(metrics)
       self.setOptimizers(optimizers, lr_schedulers)
+      #
+      self.whiten_bias_train_epochs = whiten_bias_train_epochs
 
    def selectModelType(self, model_type):
       if   (model_type == "raw"):
@@ -70,25 +73,22 @@ class GPUWhitenTrainer():
       self.optimizer2    = optimizers[1]
       self.lr_schedulers = lr_schedulers
 
-   def setTrainSteps(self, total_train_steps, whiten_bias_train_steps):
-      self.total_train_steps = total_train_steps
-      self.whiten_bias_train_steps = whiten_bias_train_steps
-
-   def train(self, train_ds):
+   def train(self, train_ds, epoch):
       self.model.train()
 
       for batch, (inputs, targets) in enumerate(train_ds, 0):
 
-         #if (self.transforms is not None):
-         #   inputs = self.transforms(inputs)
+         if (self.transforms is not None):
+            inputs = self.transforms(inputs)
          if (self.all_transforms is not None):
             inputs, targets = self.all_transforms(inputs, targets)
          
-         predicted = self.model(inputs, whiten_bias_grad=(self.run_step < self.whiten_bias_train_steps))
+         predicted = self.model(inputs, whiten_bias_grad=(epoch < self.whiten_bias_train_epochs))
          loss = self.criterion(predicted, targets)
          loss.backward()
-         for lr_scheduler in self.lr_schedulers:
-            lr_scheduler.step()
+
+         for obj in self.lr_schedulers:
+            obj.step()
          for opt in self.optimizers:
             opt.step()
          self.model.zero_grad(set_to_none=True)
@@ -102,9 +102,6 @@ class GPUWhitenTrainer():
          targets   = targets.detach().cpu().argmax(dim=1)
          loss = float(loss.item())
          logs = self.metrics(targets, predicted, loss=loss)
-         self.run_step += 1
-         if (self.run_step >= self.total_train_steps):
-            break
 
    # Here we use the inference_mode. We are telling pytorch we are doing just inference, we don't need to track
    # tensor operations with the Autograd engine for automatic differentiation. This is also what torch.no_grad() does.
@@ -134,11 +131,10 @@ class GPUWhitenTrainer():
 
    def run(self, train_dl, val_dl, epochs: int, save_path:str):
       print(f"Running {epochs} epochs")
-      self.run_step = 0
       with tqdm(range(epochs), desc="Training") as pbar:
-         for _ in pbar:
+         for epoch in pbar:
             torch.cuda.empty_cache()
-            self.train(train_dl)
+            self.train(train_dl, epoch)
             train_logs = self.metrics.logs()
             self.val(val_dl)
             val_logs = self.metrics.logs()
@@ -159,35 +155,12 @@ class GPUWhitenTrainer():
       #    The downside is that pinned memory is a limited resource, and allocating too much of it can lead to
       #    system instability. Therefore, monitor your system when using pin_memory=True.
 
-   # Here we use the inference_mode. We are telling pytorch we are doing just inference, we don't need to track
-   # tensor operations with the Autograd engine for automatic differentiation. This is also what torch.no_grad() does.
-   # torch.inference_mode() = torch.no_grad() + promising torch we will never use any tensor created in this scope in
-   # autograd tracked operations.
-   # This promise allows additional optimizations, such as removing version tracking from tensors. If we violate the
-   # promise, and use a tensor created in the inference_mode scope in an operation for which we need to calculate the
-   # gradient, we should expect errors.
-   # Recapitulating:
-   #  * If we will never use Autograd, inference_mode is more optimized.
-   #  * If we use Autograd, but just don't want to track some operations using Autograd, use no_grad.
-   # @torch.no_grad()  # This is what you usually see in tutorials
    @torch.inference_mode()  # This is the recommended way to do this
-   def eval(self, eval_dl):
-      self.model.eval()
-
-      total = 0
-      correct = 0
-      total_loss = 0
-
-      for inputs, targets in tqdm(eval_dl, desc="Validation", leave=False, disable=self.disable_tqdm):  # Disable on notebook
-         predicted = self.model(inputs)
-         loss = self.criterion(predicted, targets).item()
-
-         # Here we don't need to argmax the targets, because we have hard labels. We don't use DA during validation.
-         # We don't need to detach, because we are already in inference_mode
-         predicted = predicted.detach().cpu().argmax(dim=1)
-         targets   = targets.detach().cpu()
-         correct += predicted.eq(targets).sum().item()
-         total   += inputs.size(0)
-         total_loss += loss
-
-      return total_loss / total, correct / total
+   def evaluate(self, val_dl):
+      with tqdm(range(len(val_dl)), desc="Evaluate") as pbar:
+         for batch in pbar:
+            torch.cuda.empty_cache()
+            self.val(val_dl)
+            val_logs = self.metrics.logs()
+            pbar.set_postfix(**val_logs)
+      return val_logs
