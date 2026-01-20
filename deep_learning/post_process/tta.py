@@ -6,9 +6,10 @@ import torch.nn.functional as F
 import torchvision.transforms.v2.functional as vF
 
 class TTA():
-   def __init__(self, model, select_mixt):
+   def __init__(self, model, select_mixt, **conf):
       self.model = model
       self.__select_mixt(select_mixt)
+      self.conf = conf
 
    @staticmethod
    def help():
@@ -69,70 +70,70 @@ class TTA():
          self.__tta_fn = self.basic
 
    def basic(self, inputs):
-      return self.model(inputs)
+      return self.model(inputs).detach().cpu()
 
    def mirror(self, inputs):
-      predicted  = self.model(inputs)
-      predicted += self.model(vF.hflip(inputs))
-      predicted += self.model(vF.vflip(inputs))
+      predicted  = self.model(inputs).detach().cpu()
+      predicted += self.model(vF.hflip(inputs)).detach().cpu()
+      predicted += self.model(vF.vflip(inputs)).detach().cpu()
       return predicted
 
-   def translate(self, inputs):
-      pad = 2
+   def translate(self, inputs): # TO DO: read from config
+      pad = 1
       padded_inputs = F.pad(inputs, (pad,)*4, "reflect")
-      inputs_list = [
+      inputs_pad_list = [
          padded_inputs[:, :, 0:32, 0:32],
-         padded_inputs[:, :, 4:36, 4:36],
+         padded_inputs[:, :, 2:34, 2:34],
       ]
-      logits_list = [self.model(inputs_translate) for inputs_translate in inputs_list]
+      logits_list = [self.basic(inputs_translate) for inputs_translate in inputs_pad_list]
       logits = torch.stack(logits_list).mean(0)
       return logits
 
    def mirror_translate(self, inputs):
       logits = self.mirror(inputs)
-      pad = 2
+      pad = 1
       padded_inputs = F.pad(inputs, (pad,)*4, "reflect")
       inputs_pad_list = [
          padded_inputs[:, :, 0:32, 0:32],
-         padded_inputs[:, :, 4:36, 4:36],
+         padded_inputs[:, :, 2:34, 2:34],
       ]
       logits_translate_list = [self.mirror(inputs_translate) for inputs_translate in inputs_pad_list]
       logits_translate = torch.stack(logits_translate_list).mean(0)
       return logits + logits_translate
 
    def gray(self, inputs):
-      predicted  = self.model(inputs)
-      predicted += self.model(vF.to_grayscale(inputs, num_output_channels=3))
+      predicted  = self.model(inputs).detach().cpu()
+      predicted += self.model(vF.to_grayscale(inputs, num_output_channels=3)).detach().cpu()
       return predicted
 
    def rotate(self, inputs):
-      predicted  = self.model(inputs)
-      predicted += self.model(vF.rotate(inputs, angle=0.2))
-      predicted += self.model(vF.rotate(inputs, angle=-0.2))
+      predicted  = self.model(inputs).detach().cpu()
+      predicted += self.model(vF.rotate(inputs, angle=45)).detach().cpu()
+      predicted += self.model(vF.rotate(inputs, angle=-45)).detach().cpu()
       return predicted
 
    def adjust_brightness(self, inputs):
-      predicted  = self.model(inputs)
-      predicted += self.model(vF.adjust_brightness(inputs, adjust_brightness=0.7))
-      predicted += self.model(vF.adjust_brightness(inputs, adjust_brightness=1.3))
+      predicted  = self.model(inputs).detach().cpu()
+      predicted += self.model(vF.adjust_brightness(inputs, brightness_factor=0.7)).detach().cpu()
+      predicted += self.model(vF.adjust_brightness(inputs, brightness_factor=1.3)).detach().cpu()
       return predicted
 
    def adjust_contrast(self, inputs):
-      predicted  = self.model(inputs)
-      predicted += self.model(vF.adjust_contrast(inputs, contrast_factor=0.7))
-      predicted += self.model(vF.adjust_contrast(inputs, contrast_factor=1.3))
+      predicted  = self.model(inputs).detach().cpu()
+      predicted += self.model(vF.adjust_contrast(inputs, contrast_factor=0.7)).detach().cpu()
+      predicted += self.model(vF.adjust_contrast(inputs, contrast_factor=1.3)).detach().cpu()
       return predicted
 
    def adjust_saturation(self, inputs):
-      predicted  = self.model(inputs)
-      predicted += self.model(vF.adjust_saturation(inputs, saturation_factor=0.7))
-      predicted += self.model(vF.adjust_saturation(inputs, saturation_factor=1.3))
+      predicted  = self.model(inputs).detach().cpu()
+      predicted += self.model(vF.adjust_saturation(inputs, saturation_factor=0.7)).detach().cpu()
+      predicted += self.model(vF.adjust_saturation(inputs, saturation_factor=1.3)).detach().cpu()
       return predicted
 
    def adjust_hue(self, inputs):
-      predicted  = self.model(inputs)
-      predicted += self.model(vF.adjust_hue(inputs, hue_factor=0.15))
-      predicted += self.model(vF.adjust_hue(inputs, hue_factor=-0.15))
+      predicted  = self.model(inputs).detach().cpu()
+      predicted += self.model(vF.adjust_hue(inputs, hue_factor= 0.15)).detach().cpu()
+      predicted += self.model(vF.adjust_hue(inputs, hue_factor=-0.15)).detach().cpu()
       return predicted
 
    def mixt(self, inputs):
