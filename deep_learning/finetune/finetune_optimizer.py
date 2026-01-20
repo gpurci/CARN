@@ -8,7 +8,7 @@ sys_remove_modules("callback.callback")
 
 from callback.callback import *
 
-class RunConfigs():
+class FinetuneOptimizer():
     def __init__(self, model, trainer, epochs, train_dl, val_dl, history_path, reset_layers=None):
         self.model   = model
         self.trainer = trainer
@@ -31,7 +31,7 @@ class RunConfigs():
 
         if (optimizer is None):
             warnings.warn("\n\nEmpty 'optimizer', name '{}'\n\n".format(name))
-            return
+            return # TO DO: add raise
         if (opt_hyperparameters is None):
             opt_hyperparameters = {}
         # seteaza optimizatorul
