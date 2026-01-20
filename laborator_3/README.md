@@ -73,6 +73,104 @@ In this work, we carried out the following steps:
 
 
 ## Data augmentation
+```python
+def get_init_transform(train, image_size, mean, std):
+    transform = [ # image->tensor->resize->make square-> 
+            # if use 'ToImage' tensor should be numpy array!!!
+            v2.ToImage(), # data are transorm to torch tensor in Dataset manager, tensor should be numpy array!!!
+            v2.Resize(
+                size=int(image_size),),
+            v2.CenterCrop(image_size),
+        ]
+    if (train == False):
+        transform.extend([
+                v2.ToDtype(torch.float32, scale=False), # scale True normalized
+                v2.Normalize(mean=mean, std=std, inplace=True),
+            ])
+                # We use the inplace flag because we can safely change the tensors inplace when normalize is used.
+                # For is_train=False, we can safely change the tensors inplace because we do it only once, when caching.
+                # For is_train=True, we can safely change the tensors inplace because we clone the cached tensors first.
+    return v2.Compose(transform)
+```
+
+```python
+
+def get_transforms(image_size: int, mean, std):
+    # These transformations are cached.
+    # We could have used RandomCrop with padding. But we are smart, and we know we cache the initial_transforms so
+    # we don't compute them during runtime. Therefore, we do the padding beforehand, and apply cropping only at
+    # runtime
+    random_choice = v2.RandomChoice([
+        v2.RandomPerspective(
+                    distortion_scale=0.15, # controls how much each corner can move. 
+                    p=1.0),                # probability of applying the effect
+        v2.RandomRotation(degrees=30),     # rotates an image with random angle
+        v2.RandomAffine(
+                    degrees=30,             # rotation ±30
+                    translate=(0.15, 0.15), # horizontal/vertical translation as fraction of image
+                    scale=(0.75, 1.05),     # scale factor
+                    shear=10),              # shear angle ±10°
+        v2.RandomCrop(
+                    size=image_size,   # height & width of crop
+                    padding=4),        # pixels to pad around the image
+        v2.RandomResizedCrop(
+                    size=image_size,
+                    scale=(0.75, 1.),  # range of area proportion to crop from the original image
+                    ratio=(0.8,  1.)), # range of aspect ratio (width/height)
+        v2.RandomAdjustSharpness(
+                    sharpness_factor=1.5, # controls the degree of sharpness; ( >1 sharpened; <1 slightly blurred)
+                    p=1.),                      # probability of applying the transform
+        v2.RandomAutocontrast(p=1.), # probability of applying the transform
+        v2.RandomEqualize( # histogram of pixel values
+                    p=1.), # probability of applying the transform
+        v2.ColorJitter(  # randomly changes the brightness, contrast, saturation, and hue
+                    brightness=0.5, # factor to change brightness
+                    contrast=0.3,   # factor to change contrast
+                    saturation=0.3, # factor to change saturation
+                    hue=0.3,),      # factor to change hue
+        v2.GaussianBlur(  # applies a Gaussian blur
+                    kernel_size=(7, 7), # size of the Gaussian kernel
+                    # standard deviation of the Gaussian kernel; a float or tuple (min, max) for random sampling
+                    sigma=(0.1, 5.)),   # how to handle image borders
+        v2.RandomErasing(
+                    scale=(0.01, 0.15), # range of area ratio to erase (relative to image area)
+                    value=10,           # fill value: single number, tuple, or 'random'
+                    inplace=False,      # whether to erase in place or return a new image
+                    p=1.),              # probability of applying the transform
+        v2.Grayscale(num_output_channels=3), # number of channels in output image: 1 or 3
+        v2.RandomHorizontalFlip(),
+        v2.Identity(),  # returns the input image unchanged
+    ])
+    transforms = v2.Compose([random_choice,
+        v2.ToDtype(torch.float32, scale=False), # converts uint8 [0,255] -> float32 [0,1]
+        v2.Normalize(mean=mean, std=std, inplace=True),
+    ])
+    # We use the inplace flag because we can safely change the tensors inplace when normalize is used.
+    # For is_train=False, we can safely change the tensors inplace because we do it only once, when caching.
+    # For is_train=True, we can safely change the tensors inplace because we clone the cached tensors first.
+
+    # Q: How to make this faster?
+    # A: Use batched runtime transformations. y
+    return transforms
+```
+
+```python
+def get_all_transforms_smothing(num_classes: int = 10, smooth_size=0.13, p=None):
+    transforms = v2.RandomChoice([
+                v2.CutMix(num_classes=num_classes),  # See the CutMix paper
+                v2.MixUp(num_classes=num_classes),   # See the MixUp paper
+                LabelSmoothing(num_classes=num_classes, smooth_size=smooth_size),  # 
+            ], p)
+    return transforms
+
+def get_all_transforms_onehot(num_classes: int = 10, p=None):
+    transforms = v2.RandomChoice([
+                v2.CutMix(num_classes=num_classes),  # See the CutMix paper
+                v2.MixUp(num_classes=num_classes),   # See the MixUp paper
+                OneHotTarget(num_classes=num_classes),  # 
+            ], p)
+    return transforms
+```
 
 
 ## Analysis of the best results
@@ -298,6 +396,7 @@ Tab 3) Speed test analisis, using SVHN + CIFAR10 asa dataset, run time 40 min
 |  cpu   | torch.float32  |  basic   | optimized_for_inference |  0.7094  |  4.4882 |
 |  cpu   | torch.float32  |  basic   |         compiled        |  0.7094  |  5.8761 |
 |  cpu   | torch.float32  |  basic   |         compiled        |  0.7094  |  5.6426 |
+
 Based on the results reported in Table 3, execution time does not consistently improve under model optimization. 
 Specifically, the '*optimized_for_inference*' method on the CUDA device exhibits higher execution time, whereas on the CPU it achieves the best performance. 
 From an accuracy perspective, none of the optimization methods impact accuracy on the CPU. 
@@ -324,6 +423,177 @@ Tab 4) Speed test analisis, using SVHN + CIFAR10 asa dataset
 |  cuda  | torch.float32  | mirroring_and_translate |   frozen   |  0.7197  |  1.5268 |
 
 Based on the results reported in Table 2, several conclusions can be drawn. The most effective TTA methods are '*mirror*' and '*mirroring_and_translate*'. When comparing results after applying TTA, the selected data type has only a minimal impact on accuracy. Overall, the best balance between accuracy and processing time is obtained by using the model with the `torch.float16` data type in combination with the '*mirror*' TTA method.
+
+
+
+### Analisis SVHN, fast learn, ~1.1 min
+As a data augmentation strategy, I extended the existing methods by incorporating samples from the CIFAR-10 dataset into the training data. 
+For labeling, a counter was used such that each time an image was selected from CIFAR-10, the corresponding counter value was assigned as its label.
+```python
+EPOCH = 50
+
+W_BATCH_SIZE = 3000
+path = "{}/svhn_air_bench".format(DS_PATH)
+MEAN_DS, STD_DS = train_in.mean(axis=(0, 1, 2)), train_in.std(axis=(0, 1, 2))
+test_dl  = GpuRowDataLoader(path, test_in,  test_out,  False, MEAN_DS, STD_DS, batch_size=W_BATCH_SIZE, aug=None)
+train_dl = GpuRowDataLoader(path, train_in, train_out, True,  MEAN_DS, STD_DS, batch_size=W_BATCH_SIZE, aug=dict(flip=True, translate=2))
+
+model = VGG13(24, train_dl.num_classes)
+model = ApplyWhiten2d(model, 3).cuda().to(memory_format=torch.channels_last)
+model.compile(mode="max-autotune")
+
+train_images = train_dl.normalize(train_dl.images[:5000])
+model.init_whiten(train_images)
+
+criterion = nn.CrossEntropyLoss(reduction="sum", label_smoothing=0.2)
+device = torch.device("cuda")
+
+
+whiten_bias_train_epochs = 5
+total_train_steps = np.ceil(EPOCH * len(train_dl)).astype(int)
+whiten_bias_train_steps = np.ceil(whiten_bias_train_epochs * len(train_dl)).astype(int)
+
+bias_lr = 0.053
+head_lr = 0.97
+wd = 2e-8 * W_BATCH_SIZE
+train_dl.setWorkMode("basic")
+# Create optimizers and learning rate schedulers
+filter_params = [p for p in model.parameters() if len(p.shape) == 4 and p.requires_grad]
+norm_biases   = [p for n, p in model.named_parameters() if "norm" in n and p.requires_grad]
+param_configs = [dict(params=[model.whiten.bias], lr=bias_lr, weight_decay=wd/bias_lr),
+                 dict(params=norm_biases,         lr=bias_lr, weight_decay=wd/bias_lr),
+                 dict(params=[model.head.weight], lr=head_lr, weight_decay=wd/head_lr)]
+optimizer1 = torch.optim.SGD(param_configs, momentum=0.85, nesterov=True)
+optimizer2 = Muon(filter_params, lr=0.24, momentum=0.6, nesterov=True, ns_steps=6)
+optimizers = [optimizer1, optimizer2]
+for opt in optimizers:
+    for group in opt.param_groups:
+        group["initial_lr"] = group["lr"]
+        
+lr_sheduler1 = WhitenLrScheduler(optimizers, total_train_steps, whiten_bias_train_steps)
+lr_shedulers = [lr_sheduler1]
+```
+Tab 5) Speed training, using SVHN as dataset
+| run | epoch | train_acc | val_acc | eval_acc | time_seconds |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  0  |   0   |    0.07   |  0.055  |          |    10.938    |
+|  0  |   1   |   0.192   |  0.113  |          |    12.634    |
+|  0  |   2   |   0.277   |  0.264  |          |    13.641    |
+|  0  |   3   |   0.334   |  0.194  |          |    14.635    |
+|  0  |   4   |   0.376   |  0.308  |          |    15.652    |
+|  0  |   5   |   0.402   |  0.284  |          |    27.534    |
+|  0  |   6   |   0.421   |  0.282  |          |    28.516    |
+|  0  |   7   |   0.444   |  0.322  |          |    29.496    |
+|  0  |   8   |   0.465   |  0.289  |          |    30.511    |
+|  0  |   9   |   0.479   |  0.358  |          |    31.544    |
+|  0  |   10  |   0.497   |  0.303  |          |    32.585    |
+|  0  |   11  |   0.514   |  0.362  |          |    33.572    |
+|  0  |   12  |   0.524   |  0.369  |          |    34.556    |
+|  0  |   13  |   0.543   |  0.366  |          |    35.54     |
+|  0  |   14  |   0.554   |  0.418  |          |    36.532    |
+|  0  |   15  |   0.567   |  0.396  |          |    37.521    |
+|  0  |   16  |   0.588   |  0.449  |          |    38.502    |
+|  0  |   17  |    0.6    |  0.444  |          |    39.481    |
+|  0  |   18  |   0.609   |  0.463  |          |    40.486    |
+|  0  |   19  |   0.627   |  0.452  |          |    41.471    |
+|  0  |   20  |   0.638   |  0.473  |          |    42.453    |
+|  0  |   21  |   0.656   |  0.382  |          |    43.449    |
+|  0  |   22  |   0.671   |  0.514  |          |    44.464    |
+|  0  |   23  |   0.683   |  0.533  |          |    45.445    |
+|  0  |   24  |    0.7    |  0.566  |          |    46.437    |
+|  0  |   25  |   0.715   |  0.555  |          |    47.427    |
+|  0  |   26  |   0.735   |  0.565  |          |    48.41     |
+|  0  |   27  |    0.75   |   0.55  |          |    49.394    |
+|  0  |   28  |   0.766   |  0.589  |          |    50.384    |
+|  0  |   29  |   0.787   |   0.58  |          |    51.369    |
+|  0  |   30  |   0.805   |  0.601  |          |    52.349    |
+|  0  |   31  |   0.824   |  0.622  |          |    53.327    |
+|  0  |   32  |    0.84   |  0.628  |          |    54.307    |
+|  0  |   33  |    0.86   |   0.65  |          |    55.284    |
+|  0  |   34  |    0.88   |  0.628  |          |    56.262    |
+|  0  |   35  |    0.9    |  0.632  |          |    57.241    |
+|  0  |   36  |   0.916   |  0.666  |          |    58.218    |
+|  0  |   37  |   0.933   |  0.676  |          |    59.198    |
+|  0  |   38  |   0.947   |  0.677  |          |    60.176    |
+|  0  |   39  |   0.959   |  0.703  |          |    61.156    |
+|  0  |   40  |   0.969   |  0.701  |          |    62.136    |
+|  0  |   41  |   0.978   |  0.708  |          |    63.117    |
+|  0  |   42  |   0.984   |  0.728  |          |    64.096    |
+|  0  |   43  |    0.99   |  0.722  |          |    65.075    |
+|  0  |   44  |   0.994   |  0.731  |          |    66.055    |
+|  0  |   45  |   0.996   |  0.743  |          |    67.035    |
+|  0  |   46  |   0.997   |  0.752  |          |    68.016    |
+|  0  |   47  |   0.999   |  0.755  |          |    69.017    |
+|  0  |   48  |   0.999   |  0.759  |          |    70.044    |
+|  0  |   49  |   0.999   |  0.762  |          |    71.042    |
+|  0  |  tta  |           |         |  0.767   |    75.609    |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  1  |   0   |   0.087   |  0.076  |          |    1.025     |
+|  1  |   1   |   0.223   |   0.16  |          |    2.051     |
+|  1  |   2   |   0.317   |  0.271  |          |    3.047     |
+|  1  |   3   |    0.37   |  0.262  |          |    4.047     |
+|  1  |   4   |   0.406   |  0.321  |          |    5.063     |
+|  1  |   5   |   0.435   |  0.301  |          |    6.115     |
+|  1  |   6   |   0.447   |  0.325  |          |    7.112     |
+|  1  |   7   |   0.472   |  0.268  |          |    8.099     |
+|  1  |   8   |   0.485   |  0.328  |          |    9.083     |
+|  1  |   9   |   0.501   |  0.314  |          |    10.075    |
+|  1  |   10  |   0.516   |  0.323  |          |    11.087    |
+|  1  |   11  |    0.53   |  0.405  |          |    12.101    |
+|  1  |   12  |   0.543   |  0.397  |          |    13.095    |
+|  1  |   13  |   0.554   |  0.411  |          |    14.098    |
+|  1  |   14  |   0.567   |  0.438  |          |    15.131    |
+|  1  |   15  |   0.584   |  0.365  |          |    16.138    |
+|  1  |   16  |   0.594   |  0.396  |          |    17.145    |
+|  1  |   17  |    0.61   |  0.425  |          |    18.129    |
+|  1  |   18  |   0.621   |  0.409  |          |    19.111    |
+|  1  |   19  |   0.635   |   0.48  |          |    20.092    |
+|  1  |   20  |    0.65   |   0.5   |          |    21.068    |
+|  1  |   21  |   0.661   |  0.519  |          |    22.048    |
+|  1  |   22  |   0.678   |  0.464  |          |    23.041    |
+|  1  |   23  |   0.691   |  0.497  |          |    24.046    |
+|  1  |   24  |   0.711   |  0.508  |          |    25.071    |
+|  1  |   25  |   0.724   |  0.497  |          |    26.078    |
+|  1  |   26  |   0.742   |  0.555  |          |    27.059    |
+|  1  |   27  |   0.755   |  0.601  |          |    28.038    |
+|  1  |   28  |   0.777   |  0.574  |          |    29.014    |
+|  1  |   29  |   0.793   |  0.592  |          |    29.992    |
+|  1  |   30  |   0.808   |   0.6   |          |    30.97     |
+|  1  |   31  |   0.832   |  0.644  |          |    31.949    |
+|  1  |   32  |   0.848   |  0.619  |          |    32.927    |
+|  1  |   33  |   0.866   |  0.626  |          |    33.916    |
+|  1  |   34  |   0.886   |   0.61  |          |    34.893    |
+|  1  |   35  |   0.902   |  0.658  |          |    35.872    |
+|  1  |   36  |   0.919   |  0.648  |          |    36.849    |
+|  1  |   37  |   0.936   |  0.681  |          |    37.828    |
+|  1  |   38  |   0.951   |  0.669  |          |    38.805    |
+|  1  |   39  |   0.961   |  0.678  |          |    39.787    |
+|  1  |   40  |   0.973   |  0.685  |          |    40.766    |
+|  1  |   41  |    0.98   |  0.716  |          |    41.747    |
+|  1  |   42  |   0.985   |  0.717  |          |    42.728    |
+|  1  |   43  |   0.991   |  0.732  |          |    43.715    |
+|  1  |   44  |   0.994   |  0.738  |          |    44.695    |
+|  1  |   45  |   0.996   |  0.747  |          |    45.676    |
+|  1  |   46  |   0.998   |  0.745  |          |    46.657    |
+|  1  |   47  |   0.999   |  0.752  |          |    47.637    |
+|  1  |   48  |   0.999   |  0.758  |          |    48.618    |
+|  1  |   49  |   0.999   |  0.761  |          |    49.599    |
+|  1  |  tta  |           |         |  0.769   |    50.081    |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Designed an image augmentation pipeline
 
