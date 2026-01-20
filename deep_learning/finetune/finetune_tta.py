@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import copy
 import torch
 from torch import nn
 
@@ -11,118 +12,24 @@ import warnings
 from itertools import product
 from typing import Tuple
 from prettytable import PrettyTable
+from prettytable import TableStyle
 
 from timed_decorator.simple_timed import timed
-from tqdm import tqdm
-
+from tqdm.auto import tqdm
 
 from sys_function import * # este in root
-sys_remove_modules("callback.callback")
+sys_remove_modules("time_mon.gpu_time_mon")
 
-#from callback.callback import *
+from time_mon.gpu_time_mon import *
 
-class TTA():
-   def __init__(self, model, dataset, in_shape=None):
-      self.model   = model
+class FinetuneTTA():
+   def __init__(self, dataset, tta_obj, select_model):
       self.dataset = dataset
-      self.in_shape= in_shape
+      self.tta_obj = tta_obj
+      self.select_model = select_model
+      self.time_mon_obj = GPUTimeMon()
 
-   def selectModelType(self, device: torch.device, model_type: str):
-      """This method creates a model on a device and prepares it for serving. 
-      Depending on the optimization type, the model is optimized using different TorchScript jit utilities, 
-      or even compiled using torch.compile.
-      For a detailed description of each jit/compile method, please check the official documentation and official tutorials.
-      """
-      model = self.model.to(device)
-      model.eval()
-
-      if   (model_type == "raw"):
-         pass
-      elif (model_type == "scripted"):
-         model = torch.jit.script(model)
-      elif (model_type == "traced"):
-         if (self.in_shape is not None):
-            data  = torch.rand(self.in_shape, device=device)
-            model = torch.jit.trace(model, data)
-         else:
-            raise RuntimeError("The 'in_shape' is None '{}'".format(self.in_shape))
-      elif (model_type == "frozen"):
-         model = torch.jit.freeze(torch.jit.script(model))
-      elif (model_type == "optimized_for_inference"):
-         model = torch.jit.optimize_for_inference(torch.jit.script(model))
-      elif (model_type == "compiled"):
-         if (os.name == "nt"):
-            print("torch.compile is not supported on Windows. Try Linux or WSL instead.")
-         else:
-            model = torch.compile(model)
-      else:
-         raise RuntimeError("std::unreachable")
-      return model
-
-   @staticmethod
-   def __noTTA(model, data):
-      return model(data)
-
-   @staticmethod
-   def __mirroringTTA(model, data):
-      predicted = model(data)
-      predicted += model(hflip(data))
-      return predicted
-
-   @staticmethod
-   def __translateTTA(model, data):
-      predicted = model(data)
-      #___________
-      padding_size = 2
-      image_size = 32
-      # We pad using the same value the model has seen during training
-      padded = v2.functional.pad(data, [padding_size], fill=0.5)
-      for i in [-2, 0, 2]:
-         for j in [-2, 0, 2]:
-            if i == 0 and j == 0:
-               continue
-            x = padding_size + i
-            y = padding_size + j
-            predicted += model(padded[:, :, x:x + image_size, y:y + image_size])
-      return predicted
-
-   @staticmethod
-   def __mirroring_and_translateTTA(model, data):
-      predicted = model(data)
-      #___________
-      padding_size = 2
-      image_size = 32
-      # We pad using the same value the model has seen during training
-      padded = v2.functional.pad(data, [padding_size], fill=0.5)
-      for i in [-2, 0, 2]:
-         for j in [-2, 0, 2]:
-            if i == 0 and j == 0:
-               continue
-            x = padding_size + i
-            y = padding_size + j
-            aux = padded[:, :, x:x + image_size, y:y + image_size]
-            predicted += model(aux)
-            predicted += model(hflip(aux))
-      return predicted
-
-   @staticmethod
-   def __mirroringTTA(model, data):
-      predicted = model(data)
-      predicted += model(hflip(data))
-      return predicted
-
-   def __select_tta_inference(self, tta_type: str):
-      if (tta_type == "mirroring"):
-         self.__tta_inference = TTA.__mirroringTTA
-      elif (tta_type == "translate"):
-         self.__tta_inference = TTA.__translateTTA
-      elif (tta_type == "mirroring_and_translate"):
-         self.__tta_inference = TTA.__mirroring_and_translateTTA
-      else:
-         self.__tta_inference = TTA.__noTTA
-
-   @timed(stdout=False, return_time=True, use_seconds=True)
-   def tta_inference(self, model, batches, device: torch.device) -> float:
+   def tta_inference(self, device: torch.device) -> float:
       """This function performs inference and TTA, while measuring the elapsed time.
 
       There are 4 versions of TTA:
@@ -134,16 +41,21 @@ class TTA():
       total = 0
       correct = 0
 
-      for data, target in batches:
-         data = data.to(device)
-         predicted = self.__tta_inference(model, data)
+      torch.cuda.empty_cache()
+      self.time_mon_obj.reset()
+      self.time_mon_obj.start()
+      for inputs, targets in self.dataset:
+         inputs = inputs.to(device)
+         targets = targets.to(device).detach().cpu()
+         predicted = self.tta_obj(inputs).detach().cpu()
+         # 
+         correct += predicted.argmax(dim=1).eq(targets).sum().item()
+         total   += inputs.size(0)
+      self.time_mon_obj.stop()
 
-         correct += predicted.cpu().argmax(dim=1).eq(target).sum().item()
-         total   += data.size(0)
+      return round(correct / total, 4), round(self.time_mon_obj.time(), 4)
 
-      return round(correct / total, 4)
-
-   def inference(self, model, batches, device: torch.device, dtype: torch.dtype, model_type: str) -> Tuple[float, float]:
+   def inference(self, device: torch.device, dtype: torch.dtype, model_type: str) -> Tuple[float, float]:
       """We use the automated mixed precision module to automatically cast to our desired data type. 
       We measure the accuracy and the elapsed time of the configuration."""
 
@@ -153,13 +65,13 @@ class TTA():
       accuracy, elapsed = "N/A", "N/A"
       try:
          with torch.autocast(device_type=device.type, dtype=dtype, enabled=enable_autocast), torch.inference_mode():
-            accuracy, elapsed = self.tta_inference(model, batches, device)
-      except:
+            accuracy, elapsed = self.tta_inference(device)
+      except RuntimeError as e:
          # Debug only
 
          # import traceback
          # traceback.print_exc()
-         print(f"Model type {model_type} failed on {dtype} on {device.type}")
+         print(f"Error: '{e}', model type '{model_type}' failed on '{dtype}' on '{device.type}'")
 
       return accuracy, elapsed
 
@@ -175,15 +87,62 @@ class TTA():
             if (device is None):
                tbar.update(len(model_types))
                continue
-            speed_results = PrettyTable()
-            speed_results.field_names = ["Device", "Dtype", "TTA Type", "Model Type", "Accuracy", "Elapsed"]
+            prety_table_obj = PrettyTable()
+            prety_table_obj.field_names = ["Device", "Dtype", "TTA Type", "Model Type", "Accuracy", "Elapsed"]
 
 
             for model_type in model_types:
                model = self.selectModelType(device, model_type)
-               self.__select_tta_inference(tta_type)
-               accuracy, elapsed = self.inference(model, self.dataset, device, dtype, model_type)
-               speed_results.add_row([device, dtype, tta_type, model_type, accuracy, elapsed])
+               self.tta_obj.model = model
+               self.tta_obj.select(tta_type)
+               accuracy, elapsed = self.inference(device, dtype, model_type)
+               prety_table_obj.add_row([device, dtype, tta_type, model_type, accuracy, elapsed])
                tbar.update()
 
-            print(speed_results)
+            print(prety_table_obj)
+
+   def by(self,
+         model_types: Tuple[str, ...],
+         dtypes: Tuple[torch.dtype, ...],
+         tta_types: Tuple[str, ...],
+         devices: Tuple[torch.device | None, ...],
+         ord_prod:dict,
+         table_style=TableStyle.MARKDOWN,
+      ):
+
+      list_args = [model_types, dtypes, tta_types, devices]
+      list_keys = ["model_type", "dtype", "tta_type", "device"]
+      args = list_args.copy()
+      for i, key in enumerate(list_keys, 0):
+         args[ord_prod[key]] = list_args[i]
+      prevs = [args[i][0] for i in range(len(args)-1)]
+
+      prety_table_obj = PrettyTable()
+      prety_table_obj.field_names = ["Device", "Dtype", "TTA Type", "Model Type", "Accuracy", "Elapsed"]
+      prety_table_obj.set_style(table_style)
+
+      with tqdm(total=len(devices) * len(dtypes) * len(model_types) * len(tta_types), desc="Speed experiments") as tbar:
+         for act_args in product(*args):
+
+            for i in range(len(prevs)):
+               prev = prevs[i]
+               if (prev != act_args[i]):
+                  prevs[i] = act_args[i]
+                  prety_table_obj.add_divider()
+
+            device, dtype = act_args[ord_prod["device"]], act_args[ord_prod["dtype"]]
+            tta_type, model_type = act_args[ord_prod["tta_type"]], act_args[ord_prod["model_type"]]
+
+            if (device is None):
+               tbar.update(len(model_types))
+               continue
+               
+            model = self.select_model(device, model_type)
+            self.tta_obj.model = model
+            self.tta_obj.select(tta_type)
+            accuracy, elapsed = self.inference(device, dtype, model_type)
+            prety_table_obj.add_row([device, dtype, tta_type, model_type, accuracy, elapsed])
+            tbar.update()
+
+         print(prety_table_obj)
+      return prety_table_obj
