@@ -68,11 +68,58 @@ In this work, we carried out the following steps:
 - defined evaluation metrics to assess model performance; 
 - developed a data loader to efficiently transfer training data to VRAM; 
 - implemented training callbacks; 
-- conducted model training; 
 - performed hyperparameter fine-tuning.
 
 
+## Data aquisition
+
+The data acquisition phase includes both the main dataset used for the target task and auxiliary datasets employed to support regression-based data augmentation. 
+The main dataset is '*SVHN*' with 100 classes, while the auxiliary datasets consist of the '*CIFAR-10*' test set and the '*Oxford-IIIT Pet*' test set.
+
+```python
+if os.path.exists("/kaggle/input") and os.path.exists("/kaggle/working"):
+    print("Running on Kaggle.")
+    file_SVHN_test = "/kaggle/input/fii-atnn-2025-competition-2/SVHN_test.pkl"
+    file_SVHN_train = "/kaggle/input/fii-atnn-2025-competition-2/SVHN_train.pkl"
+else:
+    print("Not on Kaggle.")
+    file_SVHN_test = "{}/fii-atnn-2025-competition-2/SVHN_test.pkl".format(DS_PATH)
+    file_SVHN_train = "{}/fii-atnn-2025-competition-2/SVHN_train.pkl".format(DS_PATH)
+
+with open(file_SVHN_train, "rb") as fd:
+    train_in, train_out = list(zip(*pickle.load(fd)))
+    train_in, train_out = np.array(train_in, dtype=np.uint8), np.array(train_out, dtype=np.uint16)
+
+with open(file_SVHN_test, "rb") as fd:
+    test_in,  test_out  = list(zip(*pickle.load(fd)))
+    test_in,  test_out  = np.array(test_in, dtype=np.uint8),  np.array(test_out, dtype=np.uint16)
+
+# data aquisition, main dataset
+svhn_train_ds = RowDataset(dict(inputs=train_in, targets=train_out), name="SVHN train")
+svhn_test_ds  = RowDataset(dict(inputs=test_in, targets=test_out), name="SVHN test")
+
+# data aquisition help dataset
+cifar10_test = datasets.CIFAR10(root=DS_PATH, train=False, transform=None, download=True)
+oxfordIIIPet_test = datasets.OxfordIIITPet(root=DS_PATH, split="test", 
+                             target_types="category", 
+                             transform=None, download=True)
+
+```
+Below, we illustrate the data packaging procedure. The '*meta_ds*' object is a dictionary containing the following 'keys': 'data_reader', which specifies the class responsible for loading data from memory and returning an (inputs, targets) tuple; 'size', which indicates the number of training samples provided by the data reader; and 'num_classes', which defines the number of classes represented in the dataset.
+```python
+# prepare meta data for training
+svhn_train_meta_ds = dict(data_reader=svhn_train_ds, size=50000, num_classes=NUM_CLASSES)
+svhn_test_meta_ds  = dict(data_reader=svhn_test_ds,  size=10000, num_classes=NUM_CLASSES)
+# prepare meta data for help data
+meta_cifar10 = dict(data_reader=cifar10_test, size=10000, num_classes=10)
+meta_oxfordIIIPet = dict(data_reader=oxfordIIIPet_test, size=3669, num_classes=37)
+# pack help datasset
+help_metads = dict(cifar10=meta_cifar10, oxfordIIIPet=meta_oxfordIIIPet)
+```
+
 ## Data augmentation
+The '*get_init_transform*' function converts input images from NumPy format (H, W, C) to tensor format (C, H, W) and spatially centers them so that all samples conform to a uniform size of IMAGE_SIZE.
+This function is applied to both the training and test datasets. For the validation dataset, Z-score normalization is performed using the dataset’s per-channel mean and standard deviation.
 ```python
 def get_init_transform(train, image_size, mean, std):
     transform = [ # image->tensor->resize->make square-> 
@@ -82,24 +129,24 @@ def get_init_transform(train, image_size, mean, std):
                 size=int(image_size),),
             v2.CenterCrop(image_size),
         ]
+    # For train=False, Z-score normalization is performed using the dataset’s per-channel mean and standard deviation.
+    # For train=True, do nothing
     if (train == False):
         transform.extend([
                 v2.ToDtype(torch.float32, scale=False), # scale True normalized
                 v2.Normalize(mean=mean, std=std, inplace=True),
             ])
-                # We use the inplace flag because we can safely change the tensors inplace when normalize is used.
-                # For is_train=False, we can safely change the tensors inplace because we do it only once, when caching.
-                # For is_train=True, we can safely change the tensors inplace because we clone the cached tensors first.
+    # We use the inplace flag because we can safely change the tensors inplace when normalize is used.
     return v2.Compose(transform)
 ```
-
+The '*get_transforms*' function is applied exclusively to the training data. It performs a set of image augmentation operations, each selected at random with equal probability. These operations include:
+- Data diversification through geometric transformations such as rotation, translation, scaling, mirroring, cropping, and shifting. These techniques artificially expand the dataset and improve model generalization by reducing overfitting.
+- Color and illumination variations, including adjustments to brightness, contrast, saturation, and hue. This augmentation strategy increases data diversity, enhances feature discriminability, and further mitigates overfitting.
+- Noise injection, which improves the model’s robustness to real-world acquisition conditions.
+- Noise reduction, using filters such as Gaussian smoothing to remove artifacts that could negatively affect model learning.
+- Random erasing, where randomly selected regions of an image are removed to encourage the model to rely on global contextual information rather than local cues.
 ```python
-
 def get_transforms(image_size: int, mean, std):
-    # These transformations are cached.
-    # We could have used RandomCrop with padding. But we are smart, and we know we cache the initial_transforms so
-    # we don't compute them during runtime. Therefore, we do the padding beforehand, and apply cropping only at
-    # runtime
     random_choice = v2.RandomChoice([
         v2.RandomPerspective(
                     distortion_scale=0.15, # controls how much each corner can move. 
@@ -145,15 +192,10 @@ def get_transforms(image_size: int, mean, std):
         v2.ToDtype(torch.float32, scale=False), # converts uint8 [0,255] -> float32 [0,1]
         v2.Normalize(mean=mean, std=std, inplace=True),
     ])
-    # We use the inplace flag because we can safely change the tensors inplace when normalize is used.
-    # For is_train=False, we can safely change the tensors inplace because we do it only once, when caching.
-    # For is_train=True, we can safely change the tensors inplace because we clone the cached tensors first.
-
-    # Q: How to make this faster?
-    # A: Use batched runtime transformations. y
     return transforms
 ```
-
+The following two functions implement advanced regression strategies: '*get_all_transforms_smoothing*' and '*get_all_transforms_onehot*'. The '*get_all_transforms_smoothing*' function applies the CutMix, MixUp, and Label Smoothing techniques, with each method selected according to a predefined class-wise probability 𝑝. 
+The '*get_all_transforms_onehot*' function follows the same structure but replaces Label Smoothing with a One-Hot Target transformation, which operates by applying a one-hot encoding exclusively to the label inputs while leaving the input data unchanged.
 ```python
 def get_all_transforms_smothing(num_classes: int = 10, smooth_size=0.13, p=None):
     transforms = v2.RandomChoice([
@@ -175,7 +217,22 @@ def get_all_transforms_onehot(num_classes: int = 10, p=None):
 
 ## Analysis of the best results
 
-### Analisis only SVHN, with next configuration
+### Analisis SVHN, with next configuration, run time ~40 min
+Below is the AppendHelpDatasets pipeline, which incorporates auxiliary datasets into the main dataset; however, in this configuration, only the primary dataset is retained at the output.
+```python
+
+train_ds = AppendHelpDatasets(svhn_train_meta_ds, help_metads=None, 
+                              transform=get_init_transform(True,  IMAGE_SIZE, mean, std), 
+                              help_from=0.1)
+test_ds  = AppendHelpDatasets(svhn_test_meta_ds, help_metads=None, 
+                              transform=get_init_transform(False, IMAGE_SIZE, mean, std), 
+                              help_from=0.1)
+
+# select the best number workers
+test_dl  = DataLoader(test_ds , batch_size=BATCH_SIZE, shuffle=False, num_workers=6, drop_last=False)
+train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=19, drop_last=True)
+```
+
 ```python
 EPOCH = 300
 BATCH_SIZE = 128
@@ -186,7 +243,7 @@ device = torch.device("cuda")
 optimizer    = torch.optim.Adam(model.parameters(), lr=0.001)
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-7)
 ```
-Tab 1) Speed test analisis, using only SNHN asa dataset, run time 40 min
+Tab 1) Inference speed test analisis, using SVHN as dataset
 | Device |     Dtype      | TTA Type |        Model Type       | Accuracy |      Elapsed       |
 | :----: | :------------: | :------: | :---------------------: | :------: | :----------------: |
 |  cuda  | torch.bfloat16 |  basic   |           raw           |  0.6868  | 0.5282 |
@@ -267,7 +324,7 @@ From an accuracy perspective, none of the optimization methods impact accuracy o
 In contrast, on the CUDA device, the '*scripted*' optimization method yields the highest accuracy when using the `torch.float16` data type.
 When using the `torch.float16` and `torch.bfloat16` data types, a slight reduction in processing time can be observed.
 
-Tab 2) Speed test analisis, using only SNHN asa dataset
+Tab 2) Test-Time Augmentation, using SVHN as dataset
 | Device |     Dtype      |         TTA Type        | Model Type | Accuracy | Elapsed |
 | :----: | :------------: | :---------------------: | :--------: | :------: | :-----: |
 |  cuda  | torch.bfloat16 |          basic          |  scripted  |  0.6868  |  0.6201 |
@@ -306,12 +363,29 @@ Tab 2) Speed test analisis, using only SNHN asa dataset
 |  cuda  | torch.float32  |        adjust_hue       |  scripted  |  0.5253  |   0.88  |
 |  cuda  | torch.float32  |           mixt          |  scripted  |  0.5616  |  2.354  |
 
-Based on the results obtained under these configurations Tab 2, several conclusions can be drawn. The most efficient TTA methods are '*translate*' and '*mirroring_and_translate*'. The '*mixt*' method represents a combination of the following techniques: '*translate*', '*adjust_brightness*', '*adjust_contrast*', '*adjust_saturation*', and '*adjust_hue*'. The results indicate that image rotation and color-range modifications have a negative impact on accuracy. When comparing outcomes after applying TTA, the choice of data type has only a marginal effect on accuracy. Overall, the best trade-off between accuracy and processing time is achieved by using the model with data type `torch.float16` in combination with the '*translate*' TTA method.
+Based on the results obtained under Test-Time Augmentation (TTA) Tab 2, several conclusions can be drawn. The most efficient TTA methods are '*translate*' and '*mirroring_and_translate*'. The '*mixt*' method represents a combination of the following techniques: '*translate*', '*adjust_brightness*', '*adjust_contrast*', '*adjust_saturation*', and '*adjust_hue*'. The results indicate that image rotation and color-range modifications have a negative impact on accuracy. When comparing outcomes after applying TTA, the choice of data type has only a marginal effect on accuracy. Overall, the best trade-off between accuracy and processing time is achieved by using the model with data type `torch.float16` in combination with the '*translate*' TTA method.
 
 
-### Analisis SVHN + CIFAR10, with next configuration
-As a data augmentation strategy, I extended the existing methods by incorporating samples from the CIFAR-10 dataset into the training data. 
-For labeling, a counter was used such that each time an image was selected from CIFAR-10, the corresponding counter value was assigned as its label.
+### Analisis SVHN + CIFAR10 + OxfordIIITPet, with next configuration, run time ~40 min
+As a data augmentation strategy, I extended the existing methods by incorporating samples from the CIFAR-10 and OxfordIIITPet dataset into the training data. 
+For labeling, a counter was used such that each time an image was selected from CIFAR-10 or OxfordIIITPet, the corresponding counter value was assigned as its label.
+PS: main datasset is SVHN
+```python
+
+train_ds = AddVirtualDatasets(svhn_train_meta_ds, help_metads=help_metads, 
+                              transform=get_init_transform(True,  IMAGE_SIZE, mean, std), 
+                              # percent of number of auxiliari dataset from main dataset; 50000*0.1 = 5000
+                              # size of final dataset is 55000 samples
+                              help_from=0.1)
+test_ds  = AddVirtualDatasets(svhn_test_meta_ds, help_metads=None, 
+                              transform=get_init_transform(False, IMAGE_SIZE, mean, std), 
+                              help_from=0)
+
+# select the best number workers
+test_dl  = DataLoader(test_ds , batch_size=BATCH_SIZE, shuffle=False, num_workers=3, drop_last=False)
+train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=21, drop_last=False)
+```
+
 ```python
 EPOCH = 300
 BATCH_SIZE = 128
@@ -322,7 +396,7 @@ device = torch.device("cuda")
 optimizer  = torch.optim.Adam(model.parameters(), lr=1e-4)
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15, eta_min=1e-9)
 ```
-Tab 3) Speed test analisis, using SVHN + CIFAR10 asa dataset, run time 40 min
+Tab 3) Inference speed test analisis, using SVHN + CIFAR10 + OxfordIIITPet as dataset
 | Device |     Dtype      | TTA Type |        Model Type       | Accuracy | Elapsed |
 | :----: | :------------: | :------: | :---------------------: | :------: | :-----: |
 |  cuda  | torch.bfloat16 |  basic   |           raw           |  0.7092  |  0.5752 |
@@ -403,8 +477,7 @@ From an accuracy perspective, none of the optimization methods impact accuracy o
 In contrast, on the CUDA device, the '*frozen*' optimization method yields the highest accuracy when using the `torch.float16` data type.
 When using the `torch.float16` and `torch.bfloat16` data types, a slight reduction in processing time can be observed.
 
-
-Tab 4) Speed test analisis, using SVHN + CIFAR10 asa dataset
+Tab 4) Test-Time Augmentation, using SVHN + CIFAR10 + OxfordIIITPet as dataset
 | Device |     Dtype      |         TTA Type        | Model Type | Accuracy | Elapsed |
 | :----: | :------------: | :---------------------: | :--------: | :------: | :-----: |
 |  cuda  | torch.bfloat16 |          basic          |   frozen   |  0.709   |  0.6433 |
@@ -422,19 +495,30 @@ Tab 4) Speed test analisis, using SVHN + CIFAR10 asa dataset
 |  cuda  | torch.float32  |        translate        |   frozen   |  0.7136  |  0.7513 |
 |  cuda  | torch.float32  | mirroring_and_translate |   frozen   |  0.7197  |  1.5268 |
 
-Based on the results reported in Table 2, several conclusions can be drawn. The most effective TTA methods are '*mirror*' and '*mirroring_and_translate*'. When comparing results after applying TTA, the selected data type has only a minimal impact on accuracy. Overall, the best balance between accuracy and processing time is obtained by using the model with the `torch.float16` data type in combination with the '*mirror*' TTA method.
+Based on the results reported in Table 4, several conclusions can be drawn. The most effective TTA methods are '*mirror*' and '*mirroring_and_translate*'. When comparing results after applying TTA, the selected data type has only a minimal impact on accuracy. Overall, the best balance between accuracy and processing time is obtained by using the model with the `torch.float16` data type in combination with the '*mirror*' TTA method.
 
 
+### Analisis SVHN, fast train, ~1.1 min, run on RTX 4090
 
-### Analisis SVHN, fast learn, ~1.1 min
-As a data augmentation strategy, I extended the existing methods by incorporating samples from the CIFAR-10 dataset into the training data. 
-For labeling, a counter was used such that each time an image was selected from CIFAR-10, the corresponding counter value was assigned as its label.
+The training rate scheduler from: [source](https://github.com/KellerJordan/cifar10-airbench/blob/master/airbench94_muon.py)
+```python
+class WhitenLrScheduler(LRScheduler):
+   #......
+   def step(self):
+      for group in self.optimizer1.param_groups[:1]:
+         group["lr"] = group["initial_lr"] * (1 - self.run_step / self.whiten_bias_train_steps)
+      for group in self.optimizer1.param_groups[1:]+self.optimizer2.param_groups:
+         group["lr"] = group["initial_lr"] * (1 - self.run_step / self.total_train_steps)
+      self.run_step += 1
+```
+The configurations presented below are adapted from the original [source](https://github.com/KellerJordan/cifar10-airbench/blob/master/airbench94_muon.py), with several modifications introduced to improve accuracy.
 ```python
 EPOCH = 50
 
-W_BATCH_SIZE = 3000
+W_BATCH_SIZE = 2000
 path = "{}/svhn_air_bench".format(DS_PATH)
 MEAN_DS, STD_DS = train_in.mean(axis=(0, 1, 2)), train_in.std(axis=(0, 1, 2))
+# source: https://github.com/KellerJordan/cifar10-airbench/blob/master/airbench94_muon.py
 test_dl  = GpuRowDataLoader(path, test_in,  test_out,  False, MEAN_DS, STD_DS, batch_size=W_BATCH_SIZE, aug=None)
 train_dl = GpuRowDataLoader(path, train_in, train_out, True,  MEAN_DS, STD_DS, batch_size=W_BATCH_SIZE, aug=dict(flip=True, translate=2))
 
@@ -447,7 +531,6 @@ model.init_whiten(train_images)
 
 criterion = nn.CrossEntropyLoss(reduction="sum", label_smoothing=0.2)
 device = torch.device("cuda")
-
 
 whiten_bias_train_epochs = 5
 total_train_steps = np.ceil(EPOCH * len(train_dl)).astype(int)
@@ -473,436 +556,204 @@ for opt in optimizers:
 lr_sheduler1 = WhitenLrScheduler(optimizers, total_train_steps, whiten_bias_train_steps)
 lr_shedulers = [lr_sheduler1]
 ```
-Tab 5) Speed training, using SVHN as dataset
+
+Tab 5) Speed training, using SVHN as dataset, run on RTX 4090
 | run | epoch | train_acc | val_acc | eval_acc | time_seconds |
 | :-: | :---: | :-------: | :-----: | :------: | :----------: |
 |  0  |   0   |    0.07   |  0.055  |          |    10.938    |
 |  0  |   1   |   0.192   |  0.113  |          |    12.634    |
 |  0  |   2   |   0.277   |  0.264  |          |    13.641    |
-|  0  |   3   |   0.334   |  0.194  |          |    14.635    |
-|  0  |   4   |   0.376   |  0.308  |          |    15.652    |
-|  0  |   5   |   0.402   |  0.284  |          |    27.534    |
-|  0  |   6   |   0.421   |  0.282  |          |    28.516    |
-|  0  |   7   |   0.444   |  0.322  |          |    29.496    |
-|  0  |   8   |   0.465   |  0.289  |          |    30.511    |
-|  0  |   9   |   0.479   |  0.358  |          |    31.544    |
-|  0  |   10  |   0.497   |  0.303  |          |    32.585    |
-|  0  |   11  |   0.514   |  0.362  |          |    33.572    |
-|  0  |   12  |   0.524   |  0.369  |          |    34.556    |
-|  0  |   13  |   0.543   |  0.366  |          |    35.54     |
-|  0  |   14  |   0.554   |  0.418  |          |    36.532    |
-|  0  |   15  |   0.567   |  0.396  |          |    37.521    |
-|  0  |   16  |   0.588   |  0.449  |          |    38.502    |
-|  0  |   17  |    0.6    |  0.444  |          |    39.481    |
-|  0  |   18  |   0.609   |  0.463  |          |    40.486    |
-|  0  |   19  |   0.627   |  0.452  |          |    41.471    |
-|  0  |   20  |   0.638   |  0.473  |          |    42.453    |
-|  0  |   21  |   0.656   |  0.382  |          |    43.449    |
-|  0  |   22  |   0.671   |  0.514  |          |    44.464    |
-|  0  |   23  |   0.683   |  0.533  |          |    45.445    |
-|  0  |   24  |    0.7    |  0.566  |          |    46.437    |
-|  0  |   25  |   0.715   |  0.555  |          |    47.427    |
-|  0  |   26  |   0.735   |  0.565  |          |    48.41     |
-|  0  |   27  |    0.75   |   0.55  |          |    49.394    |
-|  0  |   28  |   0.766   |  0.589  |          |    50.384    |
-|  0  |   29  |   0.787   |   0.58  |          |    51.369    |
-|  0  |   30  |   0.805   |  0.601  |          |    52.349    |
-|  0  |   31  |   0.824   |  0.622  |          |    53.327    |
-|  0  |   32  |    0.84   |  0.628  |          |    54.307    |
-|  0  |   33  |    0.86   |   0.65  |          |    55.284    |
-|  0  |   34  |    0.88   |  0.628  |          |    56.262    |
-|  0  |   35  |    0.9    |  0.632  |          |    57.241    |
-|  0  |   36  |   0.916   |  0.666  |          |    58.218    |
-|  0  |   37  |   0.933   |  0.676  |          |    59.198    |
-|  0  |   38  |   0.947   |  0.677  |          |    60.176    |
-|  0  |   39  |   0.959   |  0.703  |          |    61.156    |
-|  0  |   40  |   0.969   |  0.701  |          |    62.136    |
-|  0  |   41  |   0.978   |  0.708  |          |    63.117    |
-|  0  |   42  |   0.984   |  0.728  |          |    64.096    |
-|  0  |   43  |    0.99   |  0.722  |          |    65.075    |
-|  0  |   44  |   0.994   |  0.731  |          |    66.055    |
-|  0  |   45  |   0.996   |  0.743  |          |    67.035    |
-|  0  |   46  |   0.997   |  0.752  |          |    68.016    |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
 |  0  |   47  |   0.999   |  0.755  |          |    69.017    |
 |  0  |   48  |   0.999   |  0.759  |          |    70.044    |
 |  0  |   49  |   0.999   |  0.762  |          |    71.042    |
-|  0  |  tta  |           |         |  0.767   |    75.609    |
+|  0  |  tta  |           |         |  0.767   |    **75.609**    |
 | :-: | :---: | :-------: | :-----: | :------: | :----------: |
 |  1  |   0   |   0.087   |  0.076  |          |    1.025     |
 |  1  |   1   |   0.223   |   0.16  |          |    2.051     |
 |  1  |   2   |   0.317   |  0.271  |          |    3.047     |
-|  1  |   3   |    0.37   |  0.262  |          |    4.047     |
-|  1  |   4   |   0.406   |  0.321  |          |    5.063     |
-|  1  |   5   |   0.435   |  0.301  |          |    6.115     |
-|  1  |   6   |   0.447   |  0.325  |          |    7.112     |
-|  1  |   7   |   0.472   |  0.268  |          |    8.099     |
-|  1  |   8   |   0.485   |  0.328  |          |    9.083     |
-|  1  |   9   |   0.501   |  0.314  |          |    10.075    |
-|  1  |   10  |   0.516   |  0.323  |          |    11.087    |
-|  1  |   11  |    0.53   |  0.405  |          |    12.101    |
-|  1  |   12  |   0.543   |  0.397  |          |    13.095    |
-|  1  |   13  |   0.554   |  0.411  |          |    14.098    |
-|  1  |   14  |   0.567   |  0.438  |          |    15.131    |
-|  1  |   15  |   0.584   |  0.365  |          |    16.138    |
-|  1  |   16  |   0.594   |  0.396  |          |    17.145    |
-|  1  |   17  |    0.61   |  0.425  |          |    18.129    |
-|  1  |   18  |   0.621   |  0.409  |          |    19.111    |
-|  1  |   19  |   0.635   |   0.48  |          |    20.092    |
-|  1  |   20  |    0.65   |   0.5   |          |    21.068    |
-|  1  |   21  |   0.661   |  0.519  |          |    22.048    |
-|  1  |   22  |   0.678   |  0.464  |          |    23.041    |
-|  1  |   23  |   0.691   |  0.497  |          |    24.046    |
-|  1  |   24  |   0.711   |  0.508  |          |    25.071    |
-|  1  |   25  |   0.724   |  0.497  |          |    26.078    |
-|  1  |   26  |   0.742   |  0.555  |          |    27.059    |
-|  1  |   27  |   0.755   |  0.601  |          |    28.038    |
-|  1  |   28  |   0.777   |  0.574  |          |    29.014    |
-|  1  |   29  |   0.793   |  0.592  |          |    29.992    |
-|  1  |   30  |   0.808   |   0.6   |          |    30.97     |
-|  1  |   31  |   0.832   |  0.644  |          |    31.949    |
-|  1  |   32  |   0.848   |  0.619  |          |    32.927    |
-|  1  |   33  |   0.866   |  0.626  |          |    33.916    |
-|  1  |   34  |   0.886   |   0.61  |          |    34.893    |
-|  1  |   35  |   0.902   |  0.658  |          |    35.872    |
-|  1  |   36  |   0.919   |  0.648  |          |    36.849    |
-|  1  |   37  |   0.936   |  0.681  |          |    37.828    |
-|  1  |   38  |   0.951   |  0.669  |          |    38.805    |
-|  1  |   39  |   0.961   |  0.678  |          |    39.787    |
-|  1  |   40  |   0.973   |  0.685  |          |    40.766    |
-|  1  |   41  |    0.98   |  0.716  |          |    41.747    |
-|  1  |   42  |   0.985   |  0.717  |          |    42.728    |
-|  1  |   43  |   0.991   |  0.732  |          |    43.715    |
-|  1  |   44  |   0.994   |  0.738  |          |    44.695    |
-|  1  |   45  |   0.996   |  0.747  |          |    45.676    |
-|  1  |   46  |   0.998   |  0.745  |          |    46.657    |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
 |  1  |   47  |   0.999   |  0.752  |          |    47.637    |
 |  1  |   48  |   0.999   |  0.758  |          |    48.618    |
 |  1  |   49  |   0.999   |  0.761  |          |    49.599    |
-|  1  |  tta  |           |         |  0.769   |    50.081    |
+|  1  |  tta  |           |         |  0.769   |    **50.081**    |
+
+The results of this experiment were obtained using 50 training epochs and a batch size of 2000. 
+The learning rate was set to 0.053 for bias parameters, 0.97 for the head (i.e., the output layer), and 0.24 for convolutional layers. 
+Stochastic Gradient Descent (SGD) was applied exclusively to the parameters of the normalization layers, convolutional biases, and the linear output layer, while the Muon optimization method was used solely for the convolutional weights. Best accuracy is **76.9%**, the average training time for the 2 training experiments is **62.845** seconds, device RTX 4090.
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-### Designed an image augmentation pipeline
-
-When creating the `GeneticAlgorithm` object, you can control every stage of the process through configuration dictionaries.
-
-Example:
-
+### Analisis SVHN, fast learn, ~1.5 min, run on RTX 4090
+The configurations presented below are adapted from the original [source](https://github.com/KellerJordan/cifar10-airbench/blob/master/airbench94_muon.py), with several modifications introduced to improve accuracy.
 ```python
-ttp = GeneticAlgorithm(
-    name="test",
-    extern_commnad_file="extern_command.cmd",
-    metric={"method": "TSP"},
-    init_population={"method": "TSP_aleator"},
-    fitness={"method": "TSP_f1score"},
-    select_parent={
-        "select_parent1": {"method": "turneu"},
-        "select_parent2": {"method": "turneu_choice"},
-    },
-    crossover={"method": "mixt"},
-    mutate={"method": "mixt"},
-    callback="logs/history.csv"
-)
+EPOCH = 80
+
+W_BATCH_SIZE = 2000
+path = "{}/svhn_air_bench".format(DS_PATH)
+MEAN_DS, STD_DS = train_in.mean(axis=(0, 1, 2)), train_in.std(axis=(0, 1, 2))
+test_dl  = GpuRowDataLoader(path, test_in,  test_out,  False, MEAN_DS, STD_DS, batch_size=W_BATCH_SIZE, aug=None)
+train_dl = GpuRowDataLoader(path, train_in, train_out, True,  MEAN_DS, STD_DS, batch_size=W_BATCH_SIZE, aug=dict(flip=True, translate=2))
+
+model = VGG13(24, train_dl.num_classes)
+model = ApplyWhiten2d(model, 3).cuda().to(memory_format=torch.channels_last)
+model.compile(mode="max-autotune")
+
+train_images = train_dl.normalize(train_dl.images[:5000])
+model.init_whiten(train_images)
+
+criterion = nn.CrossEntropyLoss(reduction="sum", label_smoothing=0.2)
+device = torch.device("cuda")
+
+whiten_bias_train_epochs = 5
+total_train_steps = np.ceil(EPOCH * len(train_dl)).astype(int)
+whiten_bias_train_steps = np.ceil(whiten_bias_train_epochs * len(train_dl)).astype(int)
+
+bias_lr = 0.053
+norm_lr = 0.53
+head_lr = 0.67
+wd = 2e-9 * W_BATCH_SIZE
+train_dl.setWorkMode("basic")
+# Create optimizers and learning rate schedulers
+filter_params = [p for p in model.parameters() if len(p.shape) == 4 and p.requires_grad]
+norm_biases   = [p for p in list(model.parameters())[:-1] if len(p.shape) == 1 and p.requires_grad]
+param_configs = [dict(params=[model.whiten.bias], lr=bias_lr, weight_decay=wd/bias_lr),
+                 dict(params=norm_biases,         lr=norm_lr, weight_decay=wd/bias_lr),
+                 dict(params=[model.head.weight], lr=head_lr, weight_decay=wd/head_lr)]
+optimizer1 = torch.optim.SGD(param_configs, momentum=0.1, nesterov=True)
+optimizer2 = Muon(filter_params, lr=0.001, momentum=0.6, nesterov=True, ns_steps=3)
+optimizers = [optimizer1, optimizer2]
+for opt in optimizers:
+    for group in opt.param_groups:
+        group["initial_lr"] = group["lr"]
+        
+lr_scheduler1 = WhitenLrScheduler(optimizers, total_train_steps, whiten_bias_train_steps)
+lr_schedulers = [lr_scheduler1]
 ```
-Each configuration specifies how one component of the genetic algorithm behaves.
 
----
 
-## ️ Configuration Options
+Tab 6) Speed training, using SVHN as dataset, run on RTX 4090
+| run | epoch | train_acc | val_acc | eval_acc | time_seconds |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  0  |   0   |   0.041   |  0.015  |          |    1.026     |
+|  0  |   1   |   0.101   |  0.025  |          |    2.038     |
+|  0  |   2   |    0.15   |  0.031  |          |    3.101     |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  0  |   77  |   0.648   |  0.499  |          |    79.88     |
+|  0  |   78  |   0.648   |  0.498  |          |    80.879    |
+|  0  |   79  |   0.648   |  0.499  |          |    81.874    |
+|  0  |  tta  |           |         |  **0.507**   |    83.406    |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  1  |   0   |    0.05   |  0.011  |          |    1.162     |
+|  1  |   1   |   0.107   |  0.026  |          |    2.291     |
+|  1  |   2   |   0.152   |  0.093  |          |    3.406     |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  1  |   77  |   0.629   |  0.491  |          |    87.866    |
+|  1  |   78  |   0.631   |  0.491  |          |    88.951    |
+|  1  |   79  |   0.631   |  0.492  |          |    90.033    |
+|  1  |  tta  |           |         |  **0.497**   |    90.733    |
 
-| Parameter | Purpose | Example Values |
-|------------|----------|----------------|
-| **`metric`** | Defines how the problem is evaluated (distance, time, profit, etc.). | `"TSP"` or `"TTP"` |
-| **`init_population`** | Defines how the initial population (the starting solutions) is generated. | `"TSP_aleator"` (random), `"TTP_vecin"` (heuristic) |
-| **`fitness`** | Determines how the “quality” of a solution is measured. | `"TSP_f1score"`, `"TSP_norm"`, `"TTP_linear"`, `"TTP_exp"` |
-| **`select_parent1`, `select_parent2`** | Define how parents are chosen for reproduction. Two strategies can be used for better diversity. | `"turneu"`, `"turneu_choice"`, `"roata"` |
-| **`crossover`** | Defines how two parents are combined into a child (genetic recombination). | `"split"`, `"perm_sim"`, `"mixt"` |
-| **`mutate`** | Mutation strategy for introducing randomness and variation in offspring. | `"swap"`, `"inversion"`, `"mixt"` |
-| **`callback`** | Path to the CSV file used for logging performance metrics across generations. | `"logs/history.csv"` |
-| **`extern_commnad_file`** | Optional file that allows stopping or controlling the algorithm externally. | `"extern_command.cmd"` |
+The results of this experiment were obtained using 80 training epochs and a batch size of 2000. 
+The learning rate was set to **0.053** for bias parameters, **0.67** for the head (i.e., the output layer), **0.53** for normalization layers and **0.001** for convolutional layers. 
+Stochastic Gradient Descent (SGD) was applied exclusively to the parameters of the normalization layers, convolutional biases, and the linear output layer, while the Muon optimization method was used solely for the convolutional weights. Best accuracy is **49.7%**, the average training time for the 2 training experiments is **86.72** seconds, device RTX 4090.
 
----
 
-##  GA Parameters
-
-Once the algorithm is configured, you can fine-tune its runtime parameters with:
-
+### Analisis SVHN, fast learn, ~7.1 min, run on RTX 4060
+The configurations presented below are adapted from the original [source](https://github.com/KellerJordan/cifar10-airbench/blob/master/airbench94_muon.py), with several modifications introduced to improve accuracy.
 ```python
-ttp.setParameters(
-    GENERATIONS=5000,      # Number of generations (iterations)
-    POPULATION_SIZE=1000,  # Number of individuals in each generation
-    MUTATION_RATE=0.05,    # Probability of mutation
-    CROSSOVER_RATE=0.99,   # Probability of crossover
-    SELECT_RATE=0.99,      # Fraction of population used for selection
-    ELITE_SIZE=50          # Top individuals preserved automatically each generation
-)
-```
-These control the evolution process — larger populations and more generations improve results but increase runtime.
+EPOCH = 80
 
----
+W_BATCH_SIZE = 2000
+path = "{}/svhn_air_bench".format(DS_PATH)
+MEAN_DS, STD_DS = train_in.mean(axis=(0, 1, 2)), train_in.std(axis=(0, 1, 2))
+test_dl  = GpuRowDataLoader(path, test_in,  test_out,  False, MEAN_DS, STD_DS, batch_size=W_BATCH_SIZE, aug=None)
+train_dl = GpuRowDataLoader(path, train_in, train_out, True,  MEAN_DS, STD_DS, batch_size=W_BATCH_SIZE, aug=dict(flip=True, translate=2))
 
-## TTP Generator Module
+model = VGG13(24, train_dl.num_classes)
+model = ApplyWhiten2d(model, 3).cuda().to(memory_format=torch.channels_last)
+model.compile(mode="max-autotune")
 
-The file **`ttp_generator.py`** provides the `TTPGenerator` class — a helper used to **load and prepare data** for the  
-**Travelling Thief Problem (TTP)** and **visualize routes** generated by the Genetic Algorithm.
+train_images = train_dl.normalize(train_dl.images[:5000])
+model.init_whiten(train_images)
 
-This module handles:
-- Reading city coordinates and item data from `.csv` files.  
-- Computing pairwise distances between all cities.  
-- Linking each city with assigned item **profit** and **weight**.  
-- Generating visual map images to display routes.
+criterion = nn.CrossEntropyLoss(reduction="sum", label_smoothing=0.2)
+device = torch.device("cuda")
 
----
+whiten_bias_train_epochs = 50
+total_train_steps = np.ceil(EPOCH * len(train_dl)).astype(int)
+whiten_bias_train_steps = np.ceil(whiten_bias_train_epochs * len(train_dl)).astype(int)
 
-### How It Works
-
-The `TTPGenerator` class builds a dataset that your GA can directly use.
-
-```python
-from ttp_generator import TTPGenerator
-
-# Initialize with dataset folder path
-ttp_generator = TTPGenerator(path="datasets")
-
-# Load city coordinates and item data (tab-separated CSVs)
-dataset = ttp_generator("nodes.csv", "items.csv")
-
-# The dataset contains:
-# - GENOME_LENGTH: number of cities
-# - distance: matrix of pairwise distances
-# - coords: list of (x, y) positions
-# - item_profit: array of profit values
-# - item_weight: array of item weights
+bias_lr = 0.053
+norm_lr = 0.53
+head_lr = 0.67
+wd = 2e-8 * W_BATCH_SIZE
+train_dl.setWorkMode("basic")
+# Create optimizers and learning rate schedulers
+filter_params = [p for p in model.parameters() if len(p.shape) == 4 and p.requires_grad]
+norm_biases   = [p for p in list(model.parameters())[:-1] if len(p.shape) == 1 and p.requires_grad]
+param_configs = [dict(params=[model.whiten.bias], lr=bias_lr, weight_decay=wd/bias_lr),
+                 dict(params=norm_biases,         lr=norm_lr, weight_decay=wd/bias_lr),
+                 dict(params=[model.head.weight], lr=head_lr, weight_decay=wd/head_lr)]
+optimizer1 = torch.optim.SGD(param_configs, momentum=0.85, nesterov=True)
+optimizer2 = Muon(filter_params, lr=0.24, momentum=0.6, nesterov=True, ns_steps=3)
+optimizers = [optimizer1, optimizer2]
+for opt in optimizers:
+    for group in opt.param_groups:
+        group["initial_lr"] = group["lr"]
+        
+lr_scheduler1 = WhitenLrScheduler(optimizers, total_train_steps, whiten_bias_train_steps)
+lr_schedulers = [lr_scheduler1]
 ```
 
-You can then pass this `dataset` to the main Genetic Algorithm runner:
+Tab 7) Speed training, using SVHN as dataset, runt on RTX 4060
 
-```python
-from genetic_AO_man import GeneticAlgorithm
+| run | epoch | train_acc | val_acc | eval_acc | time_seconds |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  0  |   0   |   0.051   |  0.024  |          |    26.102    |
+|  0  |   1   |   0.156   |  0.141  |          |    30.636    |
+|  0  |   2   |   0.258   |   0.22  |          |    35.177    |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  0  |   77  |   0.999   |  0.748  |          |    421.02    |
+|  0  |   78  |   0.999   |  0.748  |          |   425.497    |
+|  0  |   79  |   0.999   |   0.75  |          |   430.087    |
+|  0  |  tta  |           |         |  **0.762**   |   443.991    |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  1  |   0   |   0.058   |  0.055  |          |    4.643     |
+|  1  |   1   |   0.178   |  0.157  |          |    9.247     |
+|  1  |   2   |   0.286   |  0.204  |          |    13.896    |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+| :-: | :---: | :-------: | :-----: | :------: | :----------: |
+|  1  |   77  |   0.999   |  0.746  |          |   356.805    |
+|  1  |   78  |   0.999   |   0.75  |          |   361.257    |
+|  1  |   79  |   0.999   |   0.75  |          |   365.707    |
+|  1  |  tta  |           |         |  **0.764**   |   367.804    |
 
-# Create and configure the Genetic Algorithm instance
-ttp = GeneticAlgorithm(
-    name="ttp_example",
-    metric={"method": "TTP"},
-    init_population={"method": "TTP_aleator"},
-    fitness={"method": "TTP_linear"},
-    select_parent={
-        "select_parent1": {"method": "turneu"},
-        "select_parent2": {"method": "roata"},
-    },
-    crossover={"method": "mixt"},
-    mutate={"method": "mixt"},
-    callback="logs/history.csv"
-)
 
-# Define algorithm parameters
-ttp.setParameters(
-    GENERATIONS=1000,
-    POPULATION_SIZE=500,
-    MUTATION_RATE=0.05,
-    CROSSOVER_RATE=0.95,
-    SELECT_RATE=0.9,
-    ELITE_SIZE=50
-)
-
-# Run the algorithm using the TTP dataset
-ttp(dataset)
-```
-This will execute a **TTP optimization** where each generation improves the trade-off between **travel distance** and **total profit collected**.  
-The algorithm uses evolutionary principles — **selection, crossover, and mutation** — to evolve increasingly efficient solutions.  
-During the process, results are continuously logged and can later be analyzed or visualized.
-
----
-
-###  Outputs
-
-When you run the algorithm:
-- Progress is logged in **`logs/history.csv`**  
-- Console output shows each generation’s best fitness and score  
-- (Optional) Route visualization displays the best found path on the map  
-
-**Example console output:**
-```commandline
-Running Genetic Algorithm (TTP)
-Generation 50: best_profit=245.7, distance=312.4, fitness=0.89
-Generation 51: best_profit=249.3, distance=308.1, fitness=0.91
-...
-Optimization completed after 1000 generations.
-```
-###      Adjusting Parameters for TTP
-
-You can fine-tune the Genetic Algorithm parameters in `genetic_AO_man.py` or directly in your own script to control runtime and performance:
-
-```python
-ttp.setParameters(
-    GENERATIONS=2000,       # Number of generations (iterations)
-    POPULATION_SIZE=800,    # Number of individuals per generation
-    MUTATION_RATE=0.05,     # Probability of mutation
-    CROSSOVER_RATE=0.95,    # Probability of crossover
-    ELITE_SIZE=50           # Number of top individuals kept each generation
-)
-```
-
-#### Parameter Meaning
-
-Each parameter directly influences how your Genetic Algorithm behaves and evolves over time.  
-Understanding their effects helps you fine-tune performance and balance exploration with exploitation.
-
-| **Parameter** | **Description** | **Effect on Algorithm** | **Recommended Range** |
-|----------------|-----------------|--------------------------|------------------------|
-| **GENERATIONS** | Total number of iterations the algorithm will run. | Higher values allow for deeper evolution but increase runtime. | 500 – 10,000 |
-| **POPULATION_SIZE** | Number of individuals in each generation. | Larger values improve diversity and stability but increase computational cost. | 100 – 1,000+ |
-| **MUTATION_RATE** | Probability of applying random changes to individuals. | High values improve exploration but may reduce convergence speed. | 0.01 – 0.1 |
-| **CROSSOVER_RATE** | Probability that two selected parents will crossover to create offspring. | Encourages exploitation by combining good traits; too low may reduce diversity. | 0.8 – 0.99 |
-| **ELITE_SIZE** | Number of top individuals preserved unchanged into the next generation. | Maintains high-quality solutions; too large can reduce genetic diversity. | 10 – 50 |
- **Tip:** If your algorithm converges too quickly (fitness stops improving early), try:
-- Increasing the **mutation rate**
-- Reducing the **elite size**
-- Increasing **population size**
-
-If it’s too random and unstable, try:
-- Lowering the **mutation rate**
-- Increasing the **elite size**
-- Reducing **population size**
-
----
-
-###  Example Parameter Tuning
-
-Here’s a quick Python snippet showing how to experiment with different configurations to find the best-performing setup:
-
-```python
-# Example parameter sweep
-for population in [200, 400, 800]:
-    for mutation in [0.02, 0.05, 0.1]:
-        print(f"Running test: POPULATION={population}, MUTATION={mutation}")
-        ttp.setParameters(
-            GENERATIONS=1000,
-            POPULATION_SIZE=population,
-            MUTATION_RATE=mutation,
-            CROSSOVER_RATE=0.95,
-            ELITE_SIZE=30
-        )
-        ttp(dataset)
-```
+The results of this experiment were obtained using 80 training epochs and a batch size of 2000. 
+The learning rate was set to 0.053 for bias parameters, 0.67 for the head (i.e., the output layer), 0.53 for normalization layers and 0.24 for convolutional layers. 
+Stochastic Gradient Descent (SGD) was applied exclusively to the parameters of the normalization layers, convolutional biases, and the linear output layer, while the Muon optimization method was used solely for the convolutional weights. Best accuracy is **76.4%**, the average training time for the 2 training experiments is **405.9** seconds -> **6.76** min, device RTX 4060.
 
 
 
+## Conclusion
+The image classification latency is strongly dependent on both the chosen optimization strategy and the execution device. 
+Certain optimization modes, such as '*optimized_for_inference*', exhibit higher processing times on CUDA-enabled devices while performing more efficiently on CPUs. 
+When using CUDA, both the data type and accuracy configuration have a measurable impact on model performance, as illustrated by the preceding results.
 
-The CSV log can be plotted to analyze convergence trends, showing how fitness improves with each generation.
+Post-processing techniques yield only marginal accuracy improvements, typically not exceeding 1%. Moreover, post-processing operations that modify brightness, contrast, or saturation tend to degrade performance. 
+Among the evaluated methods, mirroring, translation, and the combined mirroring-and-translation approach consistently produced the best results.
 
----
+A comparison between slower training regimes (approximately 40 minutes with a batch size of 128) and faster training configurations (batch size of 2000) highlights the substantial influence of the learning rate on accuracy. For slower training, optimal performance was achieved with a learning rate of 1×10−4, whereas faster training required a significantly higher learning rate of 0.24. Additionally, the learning rate scheduler plays a critical role in performance optimization: `CosineAnnealingLR`, applied per epoch, proved most effective for slower training, while a gradual per-batch learning rate decay yielded superior results in the fast-training regime.
 
-### Interpreting the Results
-
-- **Fitness** measures how well a given solution balances profit and distance.  
-- **Score** typically reflects total distance or another optimization metric depending on the selected fitness method.  
-- **Profit and distance** trade-offs evolve over generations — you can compare these to evaluate different configurations.
-
-## Practical Tips
-
-- Start with small values for `POPULATION_SIZE` and `GENERATIONS` to validate your setup quickly.  
-- Use the `"mixt"` mode for **crossover** and **mutation** to automatically combine multiple strategies.  
-- Try different **selection methods** (`turneu`, `roata`, `choice`) to adjust diversity and convergence speed.  
-- To view all available options and methods, simply run:
-  ```python
-  GeneticAlgorithm().help()
-    ```
-- To stop the algorithm gracefully mid-run, edit your external command file (`extern_command.cmd`) and set:
-
-    ```yaml
-    stop: true
-    ```
-  This command allows you to safely interrupt long-running optimizations without losing progress or corrupting output logs.  
-The algorithm periodically checks this file during execution, so the stop command is detected quickly and handled gracefully.
-
----
-
-##  Algorithm Workflow
-```
-Population → Fitness Evaluation → Selection → Crossover → Mutation → New Generation
-                   ↑                                                      ↓
-              Metrics & Logging   ←  Elitism (best individuals preserved)
-```
-
-
-This cycle represents the **core loop** of the Genetic Algorithm.  
-Each stage plays a specific and essential role in the evolutionary process:
-
-- **Population** → The current set of individuals (possible solutions) in the algorithm.  
-- **Fitness Evaluation** → Each individual is evaluated based on the chosen objective or metric (for example, total route distance or total profit).  
-- **Selection** → The best individuals are selected as parents to produce the next generation.  
-- **Crossover** → Parents exchange parts of their genetic material to create new offspring (solutions).  
-- **Mutation** → Small random changes are introduced to maintain diversity and prevent stagnation.  
-- **New Generation** → The new set of individuals created after crossover and mutation replaces the previous population.  
-- **Elitism** → A few of the top-performing individuals are carried forward unchanged to ensure the best traits are preserved.
-
-The algorithm continues through this cycle until:
-- The **maximum number of generations** is reached, **or**
-- An **external stop command** (`stop: true`) is detected in the `extern_command.cmd` file.
-
----
-###  Key Takeaways
-
-Optimizing a Genetic Algorithm isn’t just about finding “one best” configuration — it’s about balancing parameters to suit your specific problem and dataset.  
-Here are the main ideas to keep in mind:
-
-- **Generations** → Define how long the algorithm evolves. More generations give better refinement but increase runtime.  
-- **Population size** → Controls diversity. Larger populations explore more possibilities but take longer per iteration.  
-- **Mutation rate** → Encourages exploration. Too high makes results chaotic; too low may trap you in local minima.  
-- **Crossover rate** → Governs exploitation. Higher values combine good solutions efficiently; lower values maintain more diversity.  
-- **Elitism** → Protects the best individuals. A small elite size helps preserve high-quality solutions while still allowing evolution.
-
-To find the right balance:
-1. Start with default parameters.  
-2. Observe the convergence trend in `logs/history.csv`.  
-3. Gradually adjust **mutation**, **elitism**, and **population size** to improve stability and convergence.  
-
----
-
-###  Example Tuning Workflow
-
-1. **Run baseline tests** with default parameters to ensure stability.  
-2. **Increase population size** to see if diversity improves results.  
-3. **Adjust mutation rate** (0.01–0.1) to fine-tune exploration.  
-4. **Use multiple selection methods** (e.g., `"turneu"` and `"roata"`) for better variety.  
-5. **Compare runs** visually using fitness plots from your CSV logs.  
-
-Through systematic experimentation, you’ll quickly learn which configurations best suit your optimization problem.
-
----
-##  Summary
-
-This framework provides a **modular and flexible system** for experimenting with Genetic Algorithms in Python.  
-It separates the evolutionary process into independent, replaceable modules, making it perfect for experimentation and learning.
-
-### Key Features:
-- Built-in support for **TSP (Travelling Salesman Problem)** and **TTP (Travelling Thief Problem)**  
-- Modular architecture — each algorithmic phase (metrics, initialization, selection, crossover, mutation) is customizable  
-- Multiple strategies for selection, mutation, and crossover  
-- Automatic CSV logging for performance tracking  
-- Optional route visualization and safe external stop control  
-
----
-
-### Final Thoughts
-
-This project provides a **powerful yet easy-to-understand framework** for implementing and experimenting with Genetic Algorithms in Python.  
-It focuses on clarity, modularity, and adaptability — making it suitable for **students, researchers, and developers** alike.
-
-Whether you're studying evolutionary computation concepts, optimizing real-world problems, or designing your own operators, this framework gives you full control over every component of the algorithm.
-
----
+In summary, deploying classifiers across heterogeneous hardware platforms necessitates comprehensive performance benchmarking on a wide range of devices to determine suitable optimization strategies, data types, and post-processing techniques for each target environment. Effective model training further requires careful hyperparameter fine-tuning; suboptimal results under one configuration do not imply equivalent performance under alternative parameter settings.
+For more results see 'main.ipynb'

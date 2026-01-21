@@ -14,8 +14,8 @@ class GpuRowDataLoader():
    def __init__(self, path, inputs, targets, train, mean, std, batch_size=500, aug=None):
       data_path = os.path.join(path, "train.pt" if train else "test.pt")
       if (not os.path.exists(data_path)):
-         images = torch.tensor(inputs)
-         labels = torch.tensor(targets)
+         images = torch.tensor(inputs).to(torch.uint8)
+         labels = torch.tensor(targets).to(torch.uint16)
          torch.save({"images": images, "labels": labels}, data_path)
 
       data = torch.load(data_path, map_location=torch.device("cuda"))
@@ -34,7 +34,7 @@ class GpuRowDataLoader():
       self.batch_size = batch_size
       self.drop_last  = train
       self.shuffle = train
-      self.num_classes = self.labels.max()+1
+      self.num_classes = self.labels.to(torch.int64).max()+1
       self.device = None
       self.setWorkMode("basic")
 
@@ -82,7 +82,7 @@ class GpuRowDataLoader():
       indices = (torch.randperm if self.shuffle else torch.arange)(len(images), device=images.device)
       for i in range(len(self)):
          idxs = indices[i*self.batch_size:(i+1)*self.batch_size]
-         yield (images[idxs], self.labels_work(self.labels[idxs]))
+         yield (images[idxs], self.labels_work(self.labels.to(torch.int64)[idxs]))
 
 def batch_flip_lr(inputs):
    flip_mask = (torch.rand(len(inputs), device=inputs.device) < 0.5).view(-1, 1, 1, 1)

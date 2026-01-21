@@ -32,7 +32,7 @@ class FinetuneAirbatch():
       prety_table_obj = PrettyTable()
       prety_table_obj.field_names = ["run", "epoch", "train_acc", "val_acc", "eval_acc", "time_seconds"]
 
-      with tqdm(total=len(work_modes), desc="Speed experiments") as tbar:
+      with tqdm(total=len(work_modes), desc="Speed train") as tbar:
          for work_mode in work_modes:
             train_dl.setWorkMode(work_mode)
             self.model.reset_parameters()
