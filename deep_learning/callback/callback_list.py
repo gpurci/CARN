@@ -18,6 +18,10 @@ class CallbacksList(object):
       #
       self.__callbacks = callbacks
 
+   def setModel(self, model):
+      for callback in self.__callbacks:
+         callback.setModel(model)
+
    def on_batch_begin(self, batch, logs=None):
       for callback in self.__callbacks:
          callback.on_batch_begin(batch, logs)
