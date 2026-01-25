@@ -9,22 +9,22 @@ from pathlib import Path
 
 from callback.callback_base import *
 
-
-# Define a callback for printing the learning rate at the end of each epoch.
 class SaveFakeImage(CallbacksBase):
-   def __init__(self, model, dataset, transform, device, size=1, path=""):
+   def __init__(self, model, dataset, transform, device, size=1, path="", freq=1):
       self.setModel(model)
       self.dataset   = dataset
       self.transform = transform
       self.device  = device
       self.figsize = (size, 2) # (rows, column)
       self.path    = path
+      self.freq    = freq
       
       Path(self.path).mkdir(mode=0o777, parents=True, exist_ok=True)
       filename = "{}/ep_{}.png".format(self.path, "init")
       self.__init_fig("init")
-      self.predict()
-      self.save(filename)
+      self.predict_and_put()
+      self.save("init", filename)
+      self.show()
 
    def __init_fig(self, epoch):
       # save a image using extension
@@ -85,14 +85,7 @@ class SaveFakeImage(CallbacksBase):
       self._model = self._model.to(model_device)
       return images
 
-   def __predict(self):
-      if (hasattr(self, "_model")):
-         images = self.__predict_model()
-      else:
-         images = self.__predict_no_model()
-      return images
-
-   def __show(self, images):
+   def __put(self, images):
       for idx, image in enumerate(images, 0):
          plt.subplot(self.figsize[0], self.figsize[1], idx+1)
          if (image is not None):
@@ -105,17 +98,24 @@ class SaveFakeImage(CallbacksBase):
             titles = ["Row image", "Generated image"]
             plt.title(titles[idx])
 
-   def predict(self):
-      images = self.__predict()
-      self.__show(images)
+   def predict_and_put(self):
+      if (hasattr(self, "_model")):
+         images = self.__predict_model()
+      else:
+         images = self.__predict_no_model()
+      self.__put(images)
 
-   def save(self, filename):
-      plt.savefig(filename)
+   def show(self):
       plt.show()
       plt.close("all")
+
+   def save(self, epoch, filename):
+      if ((isinstance(epoch, int)) and (epoch % self.freq) == 0):
+         plt.savefig(filename)
 
    def on_epoch_end(self, epoch, logs=None):
       filename = "{}/ep{:>3}.png".format(self.path, epoch)
       self.__init_fig(epoch)
-      self.predict()
-      self.save(filename)
+      self.predict_and_put()
+      self.save(epoch, filename)
+      self.show()
