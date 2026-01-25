@@ -5,6 +5,9 @@ class CallbacksBase(object):
       """"""
       pass
 
+   def setModel(self, model):
+      self._model = model
+
    def on_batch_begin(self, batch, logs=None):
       pass
 
