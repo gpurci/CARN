@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-from livelossplot import PlotLossesKeras
 from callback.callback_base import *
 
 class CallbacksList(object):
