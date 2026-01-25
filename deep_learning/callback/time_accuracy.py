@@ -14,22 +14,22 @@ class TimeAccuracy(CallbacksBase):
       self.dt  = []
       self.acc = []
 
-   def time(self):
+   def __time(self):
       return time.time()
 
-   def convert(self, seconds):
+   def __convert(self, seconds):
       return float(time.strftime("%H.%M", time.gmtime(seconds)))
    
    def on_epoch_begin(self, epoch, logs=None):
       if (self.start is None):
-         self.start = self.time()
+         self.start = self.__time()
 
    def on_epoch_end(self, epoch, logs=None):
-      dt = self.time() - self.start  # delta-time
+      dt = self.__time() - self.start  # delta-time
       
       self.epoch.append(epoch)
       self.acc.append(logs["val_acc"])
-      self.dt.append(self.convert(dt))
+      self.dt.append(self.__convert(dt))
 
       fig, axs = plt.subplots(2, 1)
       # set the spacing between subplots
