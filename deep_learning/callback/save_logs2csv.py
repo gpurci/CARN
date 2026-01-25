@@ -5,7 +5,7 @@ from pathlib import Path
 import warnings
 from callback.callback_base import *
 
-class SaveHistory(CallbacksBase):
+class SaveLogs2csv(CallbacksBase):
    def __init__(self, filename):
       self.filename = filename
       self.pd_history = None
