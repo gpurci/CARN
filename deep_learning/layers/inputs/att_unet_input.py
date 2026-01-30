@@ -33,11 +33,31 @@ class AttUnetInput(nn.Module):
       # 
       self.img_shape  = (-1, *img_shape)
 
-      self.transformer_encode = nn.TransformerEncoderLayer(embed_dim, num_heads, 
-         dim_feedforward=int(embed_dim*2), dropout=0.1, activation=nn.LeakyReLU(0.1), 
+      self.transformer_encode0 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
+         dim_feedforward=int(embed_dim*2), dropout=0.2, activation=nn.LeakyReLU(0.2), 
          layer_norm_eps=1e-05, batch_first=True, 
          norm_first=False, bias=False, device=None, dtype=None)
-      self.activ_fn = nn.LeakyReLU(0.1)
+      self.transformer_encode1 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
+         dim_feedforward=int(embed_dim*2), dropout=0.2, activation=nn.LeakyReLU(0.2), 
+         layer_norm_eps=1e-05, batch_first=True, 
+         norm_first=False, bias=False, device=None, dtype=None)
+      self.transformer_encode2 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
+         dim_feedforward=int(embed_dim*2), dropout=0.15, activation=nn.LeakyReLU(0.2), 
+         layer_norm_eps=1e-05, batch_first=True, 
+         norm_first=False, bias=False, device=None, dtype=None)
+      self.transformer_encode3 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
+         dim_feedforward=int(embed_dim*2), dropout=0.15, activation=nn.LeakyReLU(0.2), 
+         layer_norm_eps=1e-05, batch_first=True, 
+         norm_first=False, bias=False, device=None, dtype=None)
+      self.transformer_encode4 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
+         dim_feedforward=int(embed_dim*2), dropout=0.1, activation=nn.LeakyReLU(0.2), 
+         layer_norm_eps=1e-05, batch_first=True, 
+         norm_first=False, bias=False, device=None, dtype=None)
+      self.transformer_encode5 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
+         dim_feedforward=int(embed_dim*2), dropout=0.1, activation=nn.LeakyReLU(0.2), 
+         layer_norm_eps=1e-05, batch_first=True, 
+         norm_first=False, bias=False, device=None, dtype=None)
+      self.activ_fn = nn.LeakyReLU(0.2)
 
    def reset_parameters(self):
       self.bn1.reset_parameters()
@@ -84,7 +104,12 @@ class AttUnetInput(nn.Module):
 
    def forward(self, x):
       x = self.permute_in(x)
-      x = self.transformer_encode(x)
+      x = self.transformer_encode0(x)
+      x = self.transformer_encode1(x)
+      x = self.transformer_encode2(x)
+      #x = self.transformer_encode3(x)
+      #x = self.transformer_encode4(x)
+      #x = self.transformer_encode5(x)
       x = self.permute_out(x)
 
       x = self.conv1(x)
