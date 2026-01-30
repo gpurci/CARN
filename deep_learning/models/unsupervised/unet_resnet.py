@@ -20,6 +20,7 @@ class UNetResNet(nn.Module):
       self.input_layer = self._unpack_input_layer(**conf)
       self.unet_block  = UNetResNetBlock("resnet_unet", **conf)
       self.output_layer= self._unpack_output_layer(**conf)
+      self.crop = nn.ZeroPad2d(-2)
 
    def _unpack_input_layer(self, **conf):
       block_conf = conf.get("input", None)
@@ -58,5 +59,6 @@ class UNetResNet(nn.Module):
       x = self.input_layer(x)
       x = self.unet_block(x)
       x = self.output_layer(x)
+      x = self.crop(x)
       x = torch.tanh(x)
       return x
