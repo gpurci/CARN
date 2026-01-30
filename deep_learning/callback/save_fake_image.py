@@ -103,6 +103,7 @@ class SaveFakeImage(CallbacksBase):
          images = self.__predict_model()
       else:
          images = self.__predict_no_model()
+         print("Error no model '{}', fake image !".format(self._model))
       self.__put(images)
 
    def show(self):
