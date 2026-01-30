@@ -11,11 +11,12 @@ This folder contains utilities for monitoring the training process, persisting i
 |------|--------------|
 | `callback_base.py` | This class serves as the base class and defines all fundamental methods that a `callback` is required to implement. |
 | `callback_list.py` | This class functions as a container for `callbacks`, accepting a list of `callback` instances as input and invoking them sequentially in first-in, first-out (FIFO) order. |
-| `save_model_by_best_key.py` | This class save the model whenever a specified metric in the training logs exceeds its previously recorded value. |
-| `save_logs2csv.py` | This class saves the logs to a `csv` file.  |
-| `save_fake_image.py` | This class is for image generation, it saves a list of training images concatenated with synthesized images in a folder. |
-| `show_logs.py` | This class displays a plot for each log, (training and testing logs are displayed in the same plot). |
-| `time_accuracy.py` | This class displays the total training time up to the current epoch and the accuracy of the validation data. |
+| `save_model_by_best_key.py` | This `callback` save the model whenever a specified metric in the training logs exceeds its previously recorded value. |
+| `save_logs2csv.py` | This `callback` saves the logs to a `csv` file.  |
+| `save_fake_image.py` | This `callback` is for image generation, it saves a list of training images concatenated with synthesized images in a folder. |
+| `show_logs.py` | This `callback` displays a plot for each log, (training and testing logs are displayed in the same plot). |
+| `time_accuracy.py` | This `callback` displays the total training time up to the current epoch and the accuracy of the validation data. |
+| `early_stoping.py` | This `callback` enforces the termination of the training process. |
 | `test` | This folder contains the test suite used to validate the functionality of the `callback` components. |
 
 ---
@@ -141,4 +142,29 @@ This class presents the cumulative training time up to the current epoch, along 
 ```python
 class TimeAccuracy(CallbacksBase):
    def __init__(self):
+```
+
+---
+
+## early_stoping
+
+This `callback` enforces the termination of the training process. Further details are provided in `early_stoping.py`.
+
+Parameters:
+- monitor — the metric being tracked
+- mode — the direction of optimization to monitor (min for decreasing values, max for increasing values)
+- patience — the number of consecutive epochs for which the monitored condition is not satisfied
+- min_delta — the allowed value deviation from the best monitored metric
+- verbose — enables logging output
+
+```python
+class EarlyStoping(CallbacksBase):
+   def __init__(
+      self,
+      monitor="val_loss",
+      mode="min",
+      patience=10,
+      min_delta=0.0,
+      verbose=True,
+   ):
 ```
