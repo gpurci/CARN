@@ -53,7 +53,10 @@ class MetricsList(object):
    def logs(self):
       logs = {}
       for key in self.__logs.keys():
-         self.__logs[key] /= self.count
+         try:
+            self.__logs[key] /= self.count
+         except Exception as e:
+            print("Error: key '{}', has: '{}'".format(key, e))
       logs = self.__logs
       self.__logs = {}
       self.count  = 0
