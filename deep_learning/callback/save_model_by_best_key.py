@@ -19,4 +19,4 @@ class SaveModelByBestKey(CallbacksBase):
    def on_epoch_end(self, epoch, logs=None):
       if ((self.key in logs) and (logs[self.key] > self.val_best_key)):
          self.val_best_key = logs[self.key]
-         torch.save({"model_state_dict": self.model.state_dict()}, self.filename)
+         torch.save({"model_state_dict": self._model.state_dict()}, self.filename)
