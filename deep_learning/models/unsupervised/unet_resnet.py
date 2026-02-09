@@ -50,6 +50,9 @@ class UNetResNet(nn.Module):
          )
       return output_layer
 
+   def setSize(self, img_shape):
+      self.input_layer.setSize(img_shape)
+
    def reset_parameters(self):
       self.input_layer.reset_parameters()
       self.unet_block.reset_parameters()
