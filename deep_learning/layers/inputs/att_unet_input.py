@@ -19,45 +19,49 @@ class AttUnetInput(nn.Module):
          )
       self.bn1  = nn.BatchNorm2d(out_channels)
       # 
-      img_size  = np.prod(img_shape)
-      embed_dim = np.prod(frame_dim)*img_channels
+      img_size  = int(np.prod(img_shape))
+      embed_dim = int(np.prod(frame_dim)*img_channels)
       #
-      #                    B, H/frame0,                   frame0,       W/frame1,                   frame1,       Ch
-      self.hin0_shape  = (-1, img_shape[1]//frame_dim[0], frame_dim[0], img_shape[2]//frame_dim[1], frame_dim[1], img_shape[0])
-      #                    B, Seq=H'*W',                                             d_model=frame0*frame1*Ch
-      self.hin1_shape  = (-1, img_shape[1]//frame_dim[0]*img_shape[2]//frame_dim[1], frame_dim[0]*frame_dim[1]*img_shape[0])
-
-      #
-      #                 H/frame0,                        W/frame1,                   frame0,       frame1,       Ch
-      self.hout_shape = (-1, img_shape[1]//frame_dim[0], img_shape[2]//frame_dim[1], frame_dim[0], frame_dim[1], img_shape[0])
-      # 
-      self.img_shape  = (-1, *img_shape)
+      self.frame_dim = frame_dim
+      self.setSize(img_shape)
 
       self.transformer_encode0 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
          dim_feedforward=int(embed_dim*2), dropout=0.2, activation=nn.LeakyReLU(0.2), 
          layer_norm_eps=1e-05, batch_first=True, 
-         norm_first=False, bias=False, device=None, dtype=None)
+         norm_first=False, bias=True, device=None, dtype=None)
       self.transformer_encode1 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
          dim_feedforward=int(embed_dim*2), dropout=0.2, activation=nn.LeakyReLU(0.2), 
          layer_norm_eps=1e-05, batch_first=True, 
-         norm_first=False, bias=False, device=None, dtype=None)
+         norm_first=False, bias=True, device=None, dtype=None)
       self.transformer_encode2 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
          dim_feedforward=int(embed_dim*2), dropout=0.15, activation=nn.LeakyReLU(0.2), 
          layer_norm_eps=1e-05, batch_first=True, 
-         norm_first=False, bias=False, device=None, dtype=None)
+         norm_first=False, bias=True, device=None, dtype=None)
       self.transformer_encode3 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
          dim_feedforward=int(embed_dim*2), dropout=0.15, activation=nn.LeakyReLU(0.2), 
          layer_norm_eps=1e-05, batch_first=True, 
-         norm_first=False, bias=False, device=None, dtype=None)
+         norm_first=False, bias=True, device=None, dtype=None)
       self.transformer_encode4 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
          dim_feedforward=int(embed_dim*2), dropout=0.1, activation=nn.LeakyReLU(0.2), 
          layer_norm_eps=1e-05, batch_first=True, 
-         norm_first=False, bias=False, device=None, dtype=None)
+         norm_first=False, bias=True, device=None, dtype=None)
       self.transformer_encode5 = nn.TransformerEncoderLayer(embed_dim, num_heads, 
          dim_feedforward=int(embed_dim*2), dropout=0.1, activation=nn.LeakyReLU(0.2), 
          layer_norm_eps=1e-05, batch_first=True, 
-         norm_first=False, bias=False, device=None, dtype=None)
+         norm_first=False, bias=True, device=None, dtype=None)
       self.activ_fn = nn.LeakyReLU(0.2)
+
+   def setSize(self, img_shape):
+      hF, wF = self.frame_dim
+      #                   B, H/fH,             fH, W/fW,             fW, Ch
+      self.hin0_shape = (-1, img_shape[1]//hF, hF, img_shape[2]//wF, wF, img_shape[0])
+      #                   B, Seq=H'*W',                         d_model=fH*fW*Ch
+      self.hin1_shape = (-1, img_shape[1]//hF*img_shape[2]//wF, hF*wF*img_shape[0])
+      #
+      #                   B, H/fH,             W/fW,             fH, fW, Ch
+      self.hout_shape = (-1, img_shape[1]//hF, img_shape[2]//wF, hF, wF, img_shape[0])
+      # 
+      self.img_shape  = (-1, *img_shape)
 
    def reset_parameters(self):
       self.bn1.reset_parameters()
@@ -67,19 +71,19 @@ class AttUnetInput(nn.Module):
    def permute_in(self, x):
       # input_shape -> B, Ch, H, W
       # permute0    -> B, H, W, Ch
-      # reshape1    -> B, H/frame0, frame0, W/frame1, frame1, Ch
-      # reshape1    -> B, H', frame0, W', frame1, Ch
-      # permute2    -> B, H', W', frame0, frame1, Ch
-      # reshape3    -> B, Seq=H'*W', d_model=frame0*frame1*Ch
+      # reshape1    -> B, H/fH, fH, W/fW, fW, Ch
+      # reshape1    -> B, H', fH, W', fW, Ch
+      # permute2    -> B, H', W', fH, fW, Ch
+      # reshape3    -> B, Seq=H'*W', d_model=fH*fW*Ch
       # output 3    -> B, Seq, d_model
       #
       # permute  -> B, H, W, Ch
       x = torch.permute(x, dims=(0, 2, 3, 1))
-      # reshape  -> B, H', frame0, W', frame1, Ch
+      # reshape  -> B, H', fH, W', fW, Ch
       x = x.reshape(*self.hin0_shape)
-      # permute  -> B, H', W', frame0, frame1, Ch
+      # permute  -> B, H', W', fH, fW, Ch
       x = torch.permute(x, dims=(0, 1, 3, 2, 4, 5))
-      # reshape  -> B, Seq=H'*W', d_model=frame0*frame1*Ch
+      # reshape  -> B, Seq=H'*W', d_model=fH*fW*Ch
       # reshape  -> B, Seq, d_model
       x = x.reshape(*self.hin1_shape)
 
@@ -87,18 +91,18 @@ class AttUnetInput(nn.Module):
 
    def permute_out(self, x):
       # input_shape0 -> B, Seq, d_model
-      # input_shape0 -> B, H'* W', frame0 *frame1 *Ch 
-      # reshape1     -> B, H', W', frame0, frame1, Ch
-      # permute2     -> B, Ch, H', frame0, W', frame1
-      # reshape3     -> B, Ch, H'* frame0, W'* frame1
+      # input_shape0 -> B, H'* W', fH *fW *Ch 
+      # reshape1     -> B, H', W', fH, fW, Ch
+      # permute2     -> B, Ch, H', fH, W', fW
+      # reshape3     -> B, Ch, H'* fH, W'* fW
       # output 3     -> B, Ch, H, W
       #
-      # reshape     -> B, H', W', frame0, frame1, Ch
+      # reshape -> B, H', W', fH, fW, Ch
       x = x.reshape(*self.hout_shape)
-      # permute     -> B, Ch, H', frame0, W', frame1
+      # permute -> B, Ch, H', fH, W', fW
       x = torch.permute(x, dims=(0, 5, 1, 3, 2, 4))
-      # reshape     -> B, Ch, H'* frame0, W'* frame1
-      # output      -> B, Ch, H, W
+      # reshape -> B, Ch, H'* fH, W'* fW
+      # output  -> B, Ch, H, W
       x = x.reshape(*self.img_shape)
       return x
 
