@@ -5,7 +5,7 @@ from torchvision.transforms import v2
 import torch.nn.functional as F
 import torchvision.transforms.v2.functional as vF
 
-class TTA():
+class TTAClasification():
    def __init__(self, model, select_mixt, **conf):
       self.model = model
       self.__select_mixt(select_mixt)
@@ -142,5 +142,14 @@ class TTA():
          logits_list.append(fn(inputs))
       return torch.stack(logits_list).mean(0)
 
+   def __get_model_device(self):
+      try:
+         parameter = next(self.model.parameters())
+         device = parameter.device
+      except:
+         device = None
+      return device
+
    def __call__(self, x):
+      print("x: {}, model: {}".format(x.device, self.__get_model_device()))
       return self.__tta_fn(x)
