@@ -14,7 +14,7 @@ class TTAImageGenerator():
    @staticmethod
    def help():
       info_help = """TTAImageGenerator methods: basic, mixt,
-   mirror, translate, mirroring_and_translate, rotate, 
+   mirror, translate, rotate, 
    gray, adjust_brightness, adjust_contrast, adjust_saturation, adjust_hue, 
    """
       print(info_help)
@@ -28,8 +28,6 @@ class TTAImageGenerator():
          self.fn_mixt.append(self.mirror)
       if ("translate" in select_mixt):
          self.fn_mixt.append(self.translate)
-      if ("mirroring_and_translate" in select_mixt):
-         self.fn_mixt.append(self.mirror_translate)
       if ("gray" in select_mixt):
          self.fn_mixt.append(self.gray)
       if ("rotate" in select_mixt):
@@ -50,8 +48,6 @@ class TTAImageGenerator():
          self.__tta_fn = self.mirror
       elif (tta_type == "translate"):
          self.__tta_fn = self.translate
-      elif (tta_type == "mirroring_and_translate"):
-         self.__tta_fn = self.mirror_translate
       elif (tta_type == "gray"):
          self.__tta_fn = self.gray
       elif (tta_type == "rotate"):
@@ -85,62 +81,53 @@ class TTAImageGenerator():
       return predicted
 
    def translate(self, inputs): # TO DO: read from config
-      pad = 1
+      # base prediction
+      base_pred  = self.model(inputs).detach().cpu()
+      # translate
+      pad = 2
+      self.model.setSize((3, 36, 36))
       padded_inputs = F.pad(inputs, (pad,)*4, "reflect")
-      inputs_pad_list = [
-         padded_inputs[:, :, 0:32, 0:32],
-         padded_inputs[:, :, 2:34, 2:34],
-      ]
-      logits_list = [self.basic(inputs_translate) for inputs_translate in inputs_pad_list]
-      logits = torch.stack(logits_list).mean(0)
-      return logits
-
-   def mirror_translate(self, inputs):
-      logits = self.mirror(inputs)
-      pad = 1
-      padded_inputs = F.pad(inputs, (pad,)*4, "reflect")
-      inputs_pad_list = [
-         padded_inputs[:, :, 0:32, 0:32],
-         padded_inputs[:, :, 2:34, 2:34],
-      ]
-      logits_translate_list = [self.mirror(inputs_translate) for inputs_translate in inputs_pad_list]
-      logits_translate = torch.stack(logits_translate_list).mean(0)
-      return logits + logits_translate
+      pad_pred      = self.model(padded_inputs).detach().cpu()
+      pad_pred      = pad_pred[:, :, 2:-2, 2:-2]
+      self.model.setSize((3, 32, 32))
+      return (base_pred + pad_pred) / 2
 
    def gray(self, inputs):
       predicted  = self.model(inputs).detach().cpu()
       predicted += self.model(vF.to_grayscale(inputs, num_output_channels=3)).detach().cpu()
-      return predicted
+      return predicted / 2
 
    def rotate(self, inputs):
-      predicted  = self.model(inputs).detach().cpu()
-      predicted += self.model(vF.rotate(inputs, angle=45)).detach().cpu()
-      predicted += self.model(vF.rotate(inputs, angle=-45)).detach().cpu()
-      return predicted
+      basse_pred  = self.model(inputs).detach().cpu()
+      rot45_pred  = self.model(vF.rotate(inputs, angle=45)).detach().cpu()
+      rot45_pred  = vF.rotate(rot45_pred, angle=-45)
+      rot_45_pred = self.model(vF.rotate(inputs, angle=-45)).detach().cpu()
+      rot_45_pred = vF.rotate(rot_45_pred, angle=45)
+      return (basse_pred + rot45_pred + rot_45_pred) / 3
 
    def adjust_brightness(self, inputs):
       predicted  = self.model(inputs).detach().cpu()
       predicted += self.model(vF.adjust_brightness(inputs, brightness_factor=0.7)).detach().cpu()
       predicted += self.model(vF.adjust_brightness(inputs, brightness_factor=1.3)).detach().cpu()
-      return predicted
+      return predicted / 3
 
    def adjust_contrast(self, inputs):
       predicted  = self.model(inputs).detach().cpu()
       predicted += self.model(vF.adjust_contrast(inputs, contrast_factor=0.7)).detach().cpu()
       predicted += self.model(vF.adjust_contrast(inputs, contrast_factor=1.3)).detach().cpu()
-      return predicted
+      return predicted / 3
 
    def adjust_saturation(self, inputs):
       predicted  = self.model(inputs).detach().cpu()
       predicted += self.model(vF.adjust_saturation(inputs, saturation_factor=0.7)).detach().cpu()
       predicted += self.model(vF.adjust_saturation(inputs, saturation_factor=1.3)).detach().cpu()
-      return predicted
+      return predicted / 3
 
    def adjust_hue(self, inputs):
       predicted  = self.model(inputs).detach().cpu()
       predicted += self.model(vF.adjust_hue(inputs, hue_factor= 0.15)).detach().cpu()
       predicted += self.model(vF.adjust_hue(inputs, hue_factor=-0.15)).detach().cpu()
-      return predicted
+      return predicted / 3
 
    def mixt(self, inputs):
       logits_list = []
@@ -157,5 +144,4 @@ class TTAImageGenerator():
       return device
 
    def __call__(self, x):
-      print("x: {}, model: {}".format(x.device, self.__get_model_device()))
       return self.__tta_fn(x)

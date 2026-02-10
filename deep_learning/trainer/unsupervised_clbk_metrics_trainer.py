@@ -104,7 +104,7 @@ class UnsupervisedClbkMTrainer():
          # We use detach because we tell the autograd engine to not track the gradients for predicted anymore
          predicted = predicted.detach().cpu()
          targets   = targets.detach().cpu()
-         loss = float(loss.mean().item())
+         loss = float(loss.mean().detach().cpu().item())
          logs = self.metrics(targets, predicted, loss=loss)
          #self.callbacks.on_train_batch_end(batch, logs)
 
@@ -145,3 +145,4 @@ class UnsupervisedClbkMTrainer():
          except Exception as e:
             print(e)
             break
+         #print("train_logs", train_logs)
