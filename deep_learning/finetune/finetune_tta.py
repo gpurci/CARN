@@ -19,31 +19,17 @@ from tqdm.auto import tqdm
 
 from sys_function import * # este in root
 sys_remove_modules("time_mon.gpu_time_mon")
-sys_remove_modules("metrics.metrics_list")
 
 from time_mon.gpu_time_mon import *
-from metrics.metrics_list import *
 
 class FinetuneTTA():
-   def __init__(self, dataset, tta_obj, select_model, metrics:dict = {}, target_transforms=None, type_tti="clasification"):
+   def __init__(self, dataset, tta_obj, select_model):
       self.dataset = dataset
       self.tta_obj = tta_obj
       self.select_model = select_model
       self.time_mon_obj = GPUTimeMon()
-      self.metrics = MetricsList(metrics)
-      self.target_transforms = target_transforms
-      if   (type_tti == "clasification"):
-         self.tti_fn = self.tta_clasification
-         self.titple_performance = "Accuracy"
-         self.performance = "acc"
-      elif (type_tti == "generator"):
-         self.tti_fn = self.tta_generator
-         self.titple_performance = "MAE"
-         self.performance = "mae"
-      else:
-         raise NameError("The 'type_tti': '{}' does not exist!".format(type_tti))
 
-   def tta_clasification(self, device: torch.device) -> float:
+   def tta_inference(self, device: torch.device) -> float:
       """This function performs inference and TTA, while measuring the elapsed time.
       """
       total   = 0
@@ -63,24 +49,6 @@ class FinetuneTTA():
 
       return round(correct / total, 4), round(self.time_mon_obj.time(), 4)
 
-   def tta_generator(self, device: torch.device) -> float:
-      """This function performs inference and TTA, while measuring the elapsed time.
-      """
-      torch.cuda.empty_cache()
-      self.time_mon_obj.reset()
-      self.time_mon_obj.start()
-      for inputs, targets in self.dataset:
-         inputs    = inputs.to(device)
-         predicted = self.tta_obj(inputs).detach().cpu()
-         if (self.target_transforms is not None):
-            targets = self.target_transforms(inputs)
-         # 
-         logs = self.metrics(targets, predicted)
-
-      self.time_mon_obj.stop()
-
-      return self.metrics.logs()[self.performance].item(), round(self.time_mon_obj.time(), 4)
-
    def inference(self, device: torch.device, dtype: torch.dtype, model_type: str) -> Tuple[float, float]:
       """We use the automated mixed precision module to automatically cast to our desired data type. 
       We measure the accuracy and the elapsed time of the configuration."""
@@ -91,7 +59,7 @@ class FinetuneTTA():
       accuracy, elapsed = "N/A", "N/A"
       try:
          with torch.autocast(device_type=device.type, dtype=dtype, enabled=enable_autocast), torch.inference_mode():
-            accuracy, elapsed = self.tti_fn(device)
+            accuracy, elapsed = self.tta_inference(device)
       except RuntimeError as e:
          # Debug only
          print(f"Error: '{e}', model type '{model_type}' failed on '{dtype}' on '{device.type}'")
@@ -111,7 +79,7 @@ class FinetuneTTA():
                tbar.update(len(model_types))
                continue
             prety_table_obj = PrettyTable()
-            prety_table_obj.field_names = ["Device", "Dtype", "TTA Type", "Model Type", self.titple_performance, "Elapsed"]
+            prety_table_obj.field_names = ["Device", "Dtype", "TTA Type", "Model Type", "Accuracy", "Elapsed"]
 
 
             for model_type in model_types:
@@ -141,7 +109,7 @@ class FinetuneTTA():
       prevs = [args[i][0] for i in range(len(args)-1)]
 
       prety_table_obj = PrettyTable()
-      prety_table_obj.field_names = ["Device", "Dtype", "TTA Type", "Model Type", self.titple_performance, "Elapsed"]
+      prety_table_obj.field_names = ["Device", "Dtype", "TTA Type", "Model Type", "Accuracy", "Elapsed"]
       prety_table_obj.set_style(table_style)
 
       with tqdm(total=len(devices) * len(dtypes) * len(model_types) * len(tta_types), desc="Speed experiments") as tbar:
@@ -161,6 +129,7 @@ class FinetuneTTA():
                continue
                
             model = self.select_model(device, model_type)
+            model.eval()
             self.tta_obj.model = model
             self.tta_obj.select(tta_type)
             accuracy, elapsed = self.inference(device, dtype, model_type)
