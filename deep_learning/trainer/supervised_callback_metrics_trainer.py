@@ -152,9 +152,13 @@ class SupervisedCallbackMetricsTrainer():
          val_logs = self.metrics.logs()
          self.callbacks.on_test_end(val_logs)
          train_logs.update(val_logs)
-         self.callbacks.on_epoch_end(epoch, train_logs)
          if (self.lr_scheduler is not None):
             self.lr_scheduler.step()
+         try:
+            self.callbacks.on_epoch_end(epoch, train_logs)
+         except Exception as e:
+            print(e)
+            break
       # We use tqdm to have a progress bar for the epochs. We disable inner progress bars on jupyter notebooks,
       # because either they produce a lot of output, or disable loading the notebook on GitHub.
       # If you run this script on a terminal, you can enable the inner progress bars.
