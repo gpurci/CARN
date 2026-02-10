@@ -151,5 +151,4 @@ class TTAClasification():
       return device
 
    def __call__(self, x):
-      print("x: {}, model: {}".format(x.device, self.__get_model_device()))
       return self.__tta_fn(x)
