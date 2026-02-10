@@ -45,6 +45,7 @@ model and run the ”test inference time” function with different parameters.
 | `main.ipynb` | The jupiter notebook manager where is all requirements of laborator 10. |
 | `test` | The directory where we make mini-tests. |
 | `logs` | The directory where we put the logs (best models, history or generated image). |
+| `show` | Images or files for the report. |
 
 ---
 
@@ -457,6 +458,7 @@ class MAEMSELoss(nn.Module):
 
 ### Speed test
 - performed test-time inference to evaluate the model’s prediction speed on unseen data;
+
 | Device |     Dtype      | TTA Type | Model Type |   MAE    | Elapsed |
 | :----: | :------------: | :------: | :--------: | :------: | :-----: |
 |  cuda  | torch.bfloat16 |  basic   |    raw     | 0.229096 |  2.1312 |
@@ -539,7 +541,7 @@ The results shown below were obtained using the following configurations.:
 The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `mirror` and `grayscale` augmentations achieved the best performance.
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_mae.png" width="500"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/train_log_mae.png" width="500"><br>
   <strong>Figure 1:</strong> Example of training logs using MAE loss
 </p>
 
@@ -594,7 +596,7 @@ The results shown below were obtained using the following configurations.:
 The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `mirror` and `grayscale` augmentations achieved the best performance.
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_mse.png" width="500"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/train_log_mse.png" width="500"><br>
   <strong>Figure 2:</strong> Example of training logs using MSE
 </p>
 
@@ -650,7 +652,7 @@ The results shown below were obtained using the following configurations.:
 The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `rotate` and `adjust_hue` augmentations achieved the best performance.
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_KLDiv.png" width="500"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/train_log_KLDiv.png" width="500"><br>
   <strong>Figure 3:</strong> Example of training logs using KLDiv
 </p>
 
@@ -705,7 +707,7 @@ The results shown below were obtained using the following configurations.:
 The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `adjust_contrast` and `adjust_hue` augmentations achieved the best performance.
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_ssim.png" width="500"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/train_log_ssim.png" width="500"><br>
   <strong>Figure 4:</strong> Example of training logs using SSIMLoss
 </p>
 
@@ -756,7 +758,7 @@ The results shown below were obtained using the following configurations.:
 The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `mirror` and `grayscale` augmentations achieved the best performance.
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_maemse.png" width="500"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/train_log_maemse.png" width="500"><br>
   <strong>Figure 5:</strong> Example of training logs using MAE + MSE loss
 </p>
 
@@ -775,7 +777,7 @@ Based on these findings, we conclude that hybridizing loss functions—particula
 Figure 6 presents five test images in the left column and five images that meet the technical requirements (to 1x28x28 grayscale horizontally and vertically flipped images) in the right column.
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/real_image/ep0.png" width="500"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/real_image/ep0.png" width="500"><br>
   <strong>Figure 6:</strong> Example of real image with output's technical requirements
 </p>
 
@@ -788,8 +790,8 @@ The results presented below were obtained using the following configurations:
 - optimizer: Adam
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_28x28/ep199.png" width="45%">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR/ep99.png" width="45%"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/adam_CosineAnnealingLR_28x28/ep199.png" width="45%">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/adam_CosineAnnealingLR/ep99.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
   <strong>Figure 7:</strong> a) <em>Training ran for 199 epochs</em>; b) <em>Training ran for 99 epochs</em>
 </p>
@@ -799,10 +801,10 @@ The images shown in Figure 7 were generated using a more complex model with 5 mi
 
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_MAELoss_28x28/ep49.png" width="45%">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_MSELoss_28x28/ep45.png" width="45%"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/adam_CosineAnnealingLR_MAELoss_28x28/ep49.png" width="45%">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/adam_CosineAnnealingLR_MSELoss_28x28/ep45.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_ca_maemse_v1/ep48.png" width="45%"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/adam_ca_maemse_v1/ep48.png" width="45%"><br>
    <span>c)</span><br>
   <strong>Figure 8:</strong> a) <em>During training, the model was optimized using the MAE loss function</em>; b) <em>During training, the model was optimized using the MSE loss function</em>; c) <em>During training, the model was optimized using the MAE+MSE loss function.</em>
 </p>
@@ -810,8 +812,8 @@ The images shown in Figure 7 were generated using a more complex model with 5 mi
 
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_SSIMLoss_28x28/ep94.png" width="45%">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_KLDivLoss_28x28/ep52.png" width="45%"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/adam_CosineAnnealingLR_SSIMLoss_28x28/ep94.png" width="45%">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/adam_CosineAnnealingLR_KLDivLoss_28x28/ep52.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
   <strong>Figure 9:</strong> a) <em>During training, the model was optimized using the SSIM loss function</em>; b) <em>During training, the model was optimized using the KLDiv loss function.</em>
 </p>
@@ -826,8 +828,8 @@ The results presented below were obtained using the following configurations:
 - cost function: MAEMSELoss
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/advanced_muon_CosineAnnealingLR/ep294.png" width="45%">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/advanced_muon_CosineAnnealingLR_1e-3/ep299.png" width="45%"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/advanced_muon_CosineAnnealingLR/ep294.png" width="45%">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/show/advanced_muon_CosineAnnealingLR_1e-3/ep299.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
   <strong>Figure 10:</strong> a) <em>Training ran for 294 epochs</em>; b) <em>Training ran for 299 epochs</em>
 </p>
