@@ -9,9 +9,10 @@ from callback.callback_base import *
 
 
 class ShowLogs(CallbacksBase):
-   def __init__(self, title):
-      self.title = title
-      self.logs = None
+   def __init__(self, title, filename=None):
+      self.title    = title
+      self.filename = filename
+      self.logs     = None
 
    def on_epoch_begin(self, epoch, logs=None):
       pass
@@ -65,3 +66,5 @@ class ShowLogs(CallbacksBase):
          ax.legend()
 
       fig.show()
+      if (self.filename is not None):
+         plt.savefig(self.filename)
