@@ -60,7 +60,6 @@ In this work, we carried out the following steps:
 - developed callbacks to log training metrics, save generated images, and implement early stopping; 
 - developed custom loss function to optimize the generation of images;
 - performed test-time inference to evaluate the model’s prediction speed on unseen data;
-- provided the trained model weights and an accompanying `inference.py` script that loads these weights and performs test-time inference under different parameter settings;
 - included information about the runtime performance and pictures with the Tensorboard logs;
 - performed hyperparameter fine-tuning.
 
@@ -259,6 +258,71 @@ unet_conf = dict(
 model = UNetResNet("unet_resnet_numresnet_blocks", **unet_conf)
 ```
 
+```text
+==============================================================================================================
+Layer (type:depth-idx)                                       Output Shape              Param #
+==============================================================================================================
+UNetResNet                                                   [1, 1, 28, 28]            --
+├─AttUnetInput: 1-1                                          [1, 64, 32, 32]           56,880
+│    └─TransformerEncoderLayer: 2-1                          [1, 64, 48]               --
+│    │    └─MultiheadAttention: 3-1                          [1, 64, 48]               9,408
+│    │    └─Dropout: 3-2                                     [1, 64, 48]               --
+│    │    └─LayerNorm: 3-3                                   [1, 64, 48]               96
+│    │    └─Linear: 3-4                                      [1, 64, 96]               4,704
+│    │    └─LeakyReLU: 3-5                                   [1, 64, 96]               --
+│    │    └─Dropout: 3-6                                     [1, 64, 96]               --
+│    │    └─Linear: 3-7                                      [1, 64, 48]               4,656
+│    │    └─Dropout: 3-8                                     [1, 64, 48]               --
+│    │    └─LayerNorm: 3-9                                   [1, 64, 48]               96
+│    └─TransformerEncoderLayer: 2-2                          [1, 64, 48]               --
+│    │    └─MultiheadAttention: 3-10                         [1, 64, 48]               9,408
+│    │    └─Dropout: 3-11                                    [1, 64, 48]               --
+│    │    └─LayerNorm: 3-12                                  [1, 64, 48]               96
+│    │    └─Linear: 3-13                                     [1, 64, 96]               4,704
+│    │    └─LeakyReLU: 3-14                                  [1, 64, 96]               --
+│    │    └─Dropout: 3-15                                    [1, 64, 96]               --
+│    │    └─Linear: 3-16                                     [1, 64, 48]               4,656
+│    │    └─Dropout: 3-17                                    [1, 64, 48]               --
+│    │    └─LayerNorm: 3-18                                  [1, 64, 48]               96
+│    └─TransformerEncoderLayer: 2-3                          [1, 64, 48]               --
+│    │    └─MultiheadAttention: 3-19                         [1, 64, 48]               9,408
+│    │    └─Dropout: 3-20                                    [1, 64, 48]               --
+│    │    └─LayerNorm: 3-21                                  [1, 64, 48]               96
+│    │    └─Linear: 3-22                                     [1, 64, 96]               4,704
+│    │    └─LeakyReLU: 3-23                                  [1, 64, 96]               --
+│    │    └─Dropout: 3-24                                    [1, 64, 96]               --
+│    │    └─Linear: 3-25                                     [1, 64, 48]               4,656
+│    │    └─Dropout: 3-26                                    [1, 64, 48]               --
+│    │    └─LayerNorm: 3-27                                  [1, 64, 48]               96
+│    └─Conv2d: 2-4                                           [1, 64, 32, 32]           1,728
+│    └─BatchNorm2d: 2-5                                      [1, 64, 32, 32]           128
+│    └─LeakyReLU: 2-6                                        [1, 64, 32, 32]           --
+=========================================================================================================
+├─UNetResNetBlock                                            [1, 64, 32, 32]           --
+|    ├─IdentityResNetBlock: 1-1                              --                        --
+|    │    └─Sequential: 2-1                                  --                        --
+|    │    │    └─IdentityResNet: 3-1                         [1, 128, 16, 16]          24,064
+|    │    │    └─IdentityResNet: 3-2                         [1, 256, 8, 8]            95,232
+|    ├─IdentityResNetUpBlock: 1-2                            --                        --
+|    │    └─Sequential: 2-2                                  --                        --
+|    │    │    └─IdentityUpResNet: 3-3                       [1, 256, 8, 8]            70,400
+|    │    │    └─IdentityUpResNet: 3-4                       [1, 128, 16, 16]          64,896
+|    │    │    └─IdentityUpResNet: 3-5                       [1, 64, 32, 32]           18,880
+=========================================================================================================
+├─Conv2d: 1-3                                                [1, 1, 32, 32]            64
+├─ZeroPad2d: 1-4                                             [1, 1, 28, 28]            --
+==============================================================================================================
+Total params: 389,152
+Trainable params: 389,152
+Non-trainable params: 0
+Total mult-adds (Units.MEGABYTES): 51.09
+==============================================================================================================
+Input size (MB): 0.01
+Forward/backward pass size (MB): 12.63
+Params size (MB): 1.22
+Estimated Total Size (MB): 13.86
+==============================================================================================================
+```
 
 ## Developed a custom training class that encapsulates the training loop, optimization, and evaluation
 
@@ -371,7 +435,7 @@ Implemented two metrics to evaluate the model’s performance: `MAEMetrics` and 
 
 
 ## Developed custom loss function to optimize the generation of images;
-Cel mai raspandite functii de cost pentru a genera imagi sunt valoarea media absoluta `MAE` si valoarea medie patrata `MSE`.
+The most commonly used loss functions for image generation are the mean absolute error (MAE) and the mean squared error (MSE).
 - `MAE` which penalizes errors linearly. This results in slower convergence of large errors, produces clearer outputs, and is less sensitive to outliers.
 - `MSE` which penalizes large errors more heavily. It is sensitive to outliers, since a single extreme pixel can contribute significantly to the loss. In generative tasks, it often produces blurrier images because it minimizes the squared difference across the entire image, effectively averaging uncertain regions.
 
@@ -389,56 +453,377 @@ class MAEMSELoss(nn.Module):
       return self.alpha * l1 + (1 - self.alpha) * l2
 ```
 
+## Post procesing technique
 
-## Test Time Inference
+### Speed test
 - performed test-time inference to evaluate the model’s prediction speed on unseen data;
-- provided the trained model weights and an accompanying `inference.py` script that loads these weights and performs test-time inference under different parameter settings;
+| Device |     Dtype      | TTA Type | Model Type |   MAE    | Elapsed |
+| :----: | :------------: | :------: | :--------: | :------: | :-----: |
+|  cuda  | torch.bfloat16 |  basic   |    raw     | 0.229096 |  2.1312 |
+|  cuda  | torch.bfloat16 |  basic   |  compiled  | 0.229114 |  3.4912 |
+|  cuda  | torch.bfloat16 |  basic   |  compiled  | 0.229114 |  2.5374 |
+| :----: | :------------: | :------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float16  |  basic   |    raw     | 0.229066 |  2.3159 |
+|  cuda  | torch.float16  |  basic   |  compiled  | 0.229114 |  3.6642 |
+|  cuda  | torch.float16  |  basic   |  compiled  | 0.229114 |  2.5073 |
+| :----: | :------------: | :------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float32  |  basic   |    raw     | 0.229067 |  2.6176 |
+|  cuda  | torch.float32  |  basic   |  compiled  | 0.229067 |  3.5502 |
+|  cuda  | torch.float32  |  basic   |  compiled  | 0.229067 |  2.5606 |
+| :----: | :------------: | :------: | :--------: | :------: | :-----: |
+|  cpu   | torch.bfloat16 |  basic   |    raw     | 0.229067 | 22.0896 |
+|  cpu   | torch.bfloat16 |  basic   |  compiled  | 0.229067 |  12.545 |
+|  cpu   | torch.bfloat16 |  basic   |  compiled  | 0.229067 | 12.2025 |
+| :----: | :------------: | :------: | :--------: | :------: | :-----: |
+|  cpu   | torch.float16  |  basic   |    raw     | 0.229067 | 21.2028 |
+|  cpu   | torch.float16  |  basic   |  compiled  | 0.229067 | 12.1062 |
+|  cpu   | torch.float16  |  basic   |  compiled  | 0.229067 | 12.2959 |
+| :----: | :------------: | :------: | :--------: | :------: | :-----: |
+|  cpu   | torch.float32  |  basic   |    raw     | 0.229067 | 22.6157 |
+|  cpu   | torch.float32  |  basic   |  compiled  | 0.229067 | 12.0733 |
+|  cpu   | torch.float32  |  basic   |  compiled  | 0.229067 | 11.5355 |
 
-## Tensorboard
+In the table above, the mean absolute error (MAE) is used as the evaluation metric. The results show that compiling and running the model on a CUDA device with dtypes (torch.bfloat16, torch.float16) slightly increases the MAE and processing time compared to the uncompiled model, which achieves lower MAE and processing time. In contrast, the compiled model running on the CPU exhibits reduced processing time with no observable change in the MAE.
+
+### Test-Time Augmentation (TTA) 
+- performed test-time inference to evaluate the model’s prediction performance on unseen data;
 - included information about the runtime performance and pictures with the Tensorboard logs;
 
 
 
+#### MAELoss
+
+The results shown below were obtained using the following configurations.:
+- batch size: 128
+- learning rate: 1e-3
+- learning rate scheduler: CosineAnnealingLR, where 'T_max' is `10000` and 'eta_min' is `1e-9`
+- cost function: MAELoss
+- monitor: val_mae
+- mode: min
+- patience: 30
+- min_delta: 0.005
+
+| Device |     Dtype      |      TTA Type     | Model Type |   MAE    | Elapsed |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.bfloat16 |       basic       |    raw     | 0.231694 |  2.4544 |
+|  cuda  | torch.bfloat16 |       mirror      |    raw     | **0.226741** |  3.5034 |
+|  cuda  | torch.bfloat16 |     translate     |    raw     | 0.233977 |  3.0643 |
+|  cuda  | torch.bfloat16 |       rotate      |    raw     | 0.268929 |  3.5329 |
+|  cuda  | torch.bfloat16 |        gray       |    raw     | **0.231539** |  3.0166 |
+|  cuda  | torch.bfloat16 | adjust_brightness |    raw     | 0.320765 |  4.5233 |
+|  cuda  | torch.bfloat16 |  adjust_contrast  |    raw     | 0.320559 |  3.571  |
+|  cuda  | torch.bfloat16 | adjust_saturation |    raw     | 0.320401 |  3.6126 |
+|  cuda  | torch.bfloat16 |     adjust_hue    |    raw     | 0.290583 |  3.6815 |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float16  |       basic       |    raw     | 0.23176  |  2.1863 |
+|  cuda  | torch.float16  |       mirror      |    raw     | **0.226813** |  3.538  |
+|  cuda  | torch.float16  |     translate     |    raw     | 0.234016 |  2.9135 |
+|  cuda  | torch.float16  |       rotate      |    raw     | 0.269021 |  3.6591 |
+|  cuda  | torch.float16  |        gray       |    raw     | **0.231595** |  2.7406 |
+|  cuda  | torch.float16  | adjust_brightness |    raw     | 0.320966 |  3.5452 |
+|  cuda  | torch.float16  |  adjust_contrast  |    raw     | 0.32077  |  3.2251 |
+|  cuda  | torch.float16  | adjust_saturation |    raw     | 0.320615 |  3.4014 |
+|  cuda  | torch.float16  |     adjust_hue    |    raw     | 0.290775 |  3.4934 |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float32  |       basic       |    raw     | 0.231781 |  2.6357 |
+|  cuda  | torch.float32  |       mirror      |    raw     | **0.22683**  |  4.5953 |
+|  cuda  | torch.float32  |     translate     |    raw     | 0.234027 |  3.9215 |
+|  cuda  | torch.float32  |       rotate      |    raw     | 0.259811 |  4.7869 |
+|  cuda  | torch.float32  |        gray       |    raw     | **0.231615** |  3.5464 |
+|  cuda  | torch.float32  | adjust_brightness |    raw     | 0.321002 |  4.5019 |
+|  cuda  | torch.float32  |  adjust_contrast  |    raw     | 0.320807 |  4.6313 |
+|  cuda  | torch.float32  | adjust_saturation |    raw     | 0.320652 |  4.5004 |
+|  cuda  | torch.float32  |     adjust_hue    |    raw     | 0.290813 |  4.6808 |
 
 
+The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `mirror` and `grayscale` augmentations achieved the best performance.
+
+<p align="center">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_mae.png" width="500"><br>
+  <strong>Figure 1:</strong> Example of training logs using MAE loss
+</p>
+
+
+
+#### MSELoss
+
+The results shown below were obtained using the following configurations.:
+- batch size: 128
+- learning rate: 1e-3
+- learning rate scheduler: CosineAnnealingLR, where 'T_max' is `10000` and 'eta_min' is `1e-9`
+- cost function: MSELoss
+- monitor: val_mae
+- mode: min
+- patience: 30
+- min_delta: 0.005
+
+| Device |     Dtype      |      TTA Type     | Model Type |   MAE    | Elapsed |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.bfloat16 |       basic       |    raw     | 0.244284 |  2.5339 |
+|  cuda  | torch.bfloat16 |       mirror      |    raw     | **0.240889** |  3.4754 |
+|  cuda  | torch.bfloat16 |     translate     |    raw     | 0.250147 |  3.0905 |
+|  cuda  | torch.bfloat16 |       rotate      |    raw     | 0.278154 |  3.6406 |
+|  cuda  | torch.bfloat16 |        gray       |    raw     | **0.24386**  |  3.2318 |
+|  cuda  | torch.bfloat16 | adjust_brightness |    raw     | 0.29471  |  3.5646 |
+|  cuda  | torch.bfloat16 |  adjust_contrast  |    raw     | 0.293947 |  3.3732 |
+|  cuda  | torch.bfloat16 | adjust_saturation |    raw     | 0.293689 |  3.6277 |
+|  cuda  | torch.bfloat16 |     adjust_hue    |    raw     | 0.27972  |  3.7747 |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float16  |       basic       |    raw     | 0.244211 |  2.4385 |
+|  cuda  | torch.float16  |       mirror      |    raw     | **0.240808** |  3.5195 |
+|  cuda  | torch.float16  |     translate     |    raw     | 0.250043 |  3.0302 |
+|  cuda  | torch.float16  |       rotate      |    raw     | 0.278055 |  3.5488 |
+|  cuda  | torch.float16  |        gray       |    raw     | **0.24374**  |  3.2125 |
+|  cuda  | torch.float16  | adjust_brightness |    raw     | 0.294887 |  3.6104 |
+|  cuda  | torch.float16  |  adjust_contrast  |    raw     | 0.294138 |  3.5075 |
+|  cuda  | torch.float16  | adjust_saturation |    raw     | 0.293872 |  3.4169 |
+|  cuda  | torch.float16  |     adjust_hue    |    raw     | 0.279837 |  3.8008 |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float32  |       basic       |    raw     | 0.24421  |  2.8383 |
+|  cuda  | torch.float32  |       mirror      |    raw     | **0.24081**  |  4.7937 |
+|  cuda  | torch.float32  |     translate     |    raw     | 0.250041 |  3.9369 |
+|  cuda  | torch.float32  |       rotate      |    raw     | 0.274297 |  4.9602 |
+|  cuda  | torch.float32  |        gray       |    raw     | **0.243739** |  3.6503 |
+|  cuda  | torch.float32  | adjust_brightness |    raw     | 0.294877 |  4.6879 |
+|  cuda  | torch.float32  |  adjust_contrast  |    raw     | 0.294128 |  4.8217 |
+|  cuda  | torch.float32  | adjust_saturation |    raw     | 0.293861 |  4.6663 |
+|  cuda  | torch.float32  |     adjust_hue    |    raw     | 0.279831 |  5.049  |
+
+
+
+The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `mirror` and `grayscale` augmentations achieved the best performance.
+
+<p align="center">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_mse.png" width="500"><br>
+  <strong>Figure 2:</strong> Example of training logs using MSE
+</p>
+
+
+
+
+#### KLDivLoss
+
+
+The results shown below were obtained using the following configurations.:
+- batch size: 128
+- learning rate: 1e-3
+- learning rate scheduler: CosineAnnealingLR, where 'T_max' is `10000` and 'eta_min' is `1e-9`
+- cost function: KLDivLoss
+- monitor: val_mae
+- mode: min
+- patience: 30
+- min_delta: 0.005
+
+| Device |     Dtype      |      TTA Type     | Model Type |   MAE    | Elapsed |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.bfloat16 |       basic       |    raw     | 0.711503 |  2.0132 |
+|  cuda  | torch.bfloat16 |       mirror      |    raw     | 0.712122 |  2.8409 |
+|  cuda  | torch.bfloat16 |     translate     |    raw     | 0.715872 |  2.4703 |
+|  cuda  | torch.bfloat16 |       rotate      |    raw     | **0.678829** |  3.0768 |
+|  cuda  | torch.bfloat16 |        gray       |    raw     | 0.71264  |  2.3971 |
+|  cuda  | torch.bfloat16 | adjust_brightness |    raw     | 0.725766 |  2.9401 |
+|  cuda  | torch.bfloat16 |  adjust_contrast  |    raw     | 0.725176 |  3.1132 |
+|  cuda  | torch.bfloat16 | adjust_saturation |    raw     | 0.728149 |  3.1398 |
+|  cuda  | torch.bfloat16 |     adjust_hue    |    raw     | **0.706842** |  3.1044 |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float16  |       basic       |    raw     | 0.711514 |  2.0579 |
+|  cuda  | torch.float16  |       mirror      |    raw     | 0.712138 |  2.8964 |
+|  cuda  | torch.float16  |     translate     |    raw     | 0.715835 |  2.6396 |
+|  cuda  | torch.float16  |       rotate      |    raw     | **0.679425** |  3.5119 |
+|  cuda  | torch.float16  |        gray       |    raw     | 0.712688 |  2.9239 |
+|  cuda  | torch.float16  | adjust_brightness |    raw     | 0.725691 |  3.4615 |
+|  cuda  | torch.float16  |  adjust_contrast  |    raw     | 0.725089 |  3.0161 |
+|  cuda  | torch.float16  | adjust_saturation |    raw     | 0.728062 |  3.2119 |
+|  cuda  | torch.float16  |     adjust_hue    |    raw     | **0.706915** |  3.3419 |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float32  |       basic       |    raw     | 0.711379 |  2.5319 |
+|  cuda  | torch.float32  |       mirror      |    raw     | 0.712001 |  4.3747 |
+|  cuda  | torch.float32  |     translate     |    raw     | 0.715691 |  3.6793 |
+|  cuda  | torch.float32  |       rotate      |    raw     | **0.670981** |  4.4712 |
+|  cuda  | torch.float32  |        gray       |    raw     | 0.712559 |  3.3643 |
+|  cuda  | torch.float32  | adjust_brightness |    raw     | 0.725636 |  4.3851 |
+|  cuda  | torch.float32  |  adjust_contrast  |    raw     | 0.725035 |  4.4905 |
+|  cuda  | torch.float32  | adjust_saturation |    raw     | 0.72801  |  5.0116 |
+|  cuda  | torch.float32  |     adjust_hue    |    raw     | **0.706842** |  4.5254 |
+
+
+The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `rotate` and `adjust_hue` augmentations achieved the best performance.
+
+<p align="center">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_KLDiv.png" width="500"><br>
+  <strong>Figure 3:</strong> Example of training logs using KLDiv
+</p>
+
+
+
+
+#### SSIMLoss
+
+The results shown below were obtained using the following configurations.:
+- batch size: 128
+- learning rate: 1e-3
+- learning rate scheduler: CosineAnnealingLR, where 'T_max' is `10000` and 'eta_min' is `1e-9`
+- cost function: SSIMLoss
+- monitor: val_mae
+- mode: min
+- patience: 30
+- min_delta: 0.005
+
+| Device |     Dtype      |      TTA Type     | Model Type |   MAE    | Elapsed |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.bfloat16 |       basic       |    raw     | 0.403068 |  2.2443 |
+|  cuda  | torch.bfloat16 |       mirror      |    raw     | 0.396519 |  3.5668 |
+|  cuda  | torch.bfloat16 |     translate     |    raw     | 0.391465 |  2.9717 |
+|  cuda  | torch.bfloat16 |       rotate      |    raw     | 0.384652 |  3.3596 |
+|  cuda  | torch.bfloat16 |        gray       |    raw     | 0.399346 |  2.6626 |
+|  cuda  | torch.bfloat16 | adjust_brightness |    raw     | 0.353793 |  3.5313 |
+|  cuda  | torch.bfloat16 |  adjust_contrast  |    raw     | **0.34851**  |  3.2904 |
+|  cuda  | torch.bfloat16 | adjust_saturation |    raw     | 0.356305 |  3.3689 |
+|  cuda  | torch.bfloat16 |     adjust_hue    |    raw     | **0.32136**  |  3.3543 |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float16  |       basic       |    raw     | 0.402665 |  2.2062 |
+|  cuda  | torch.float16  |       mirror      |    raw     | 0.396164 |  3.4822 |
+|  cuda  | torch.float16  |     translate     |    raw     | 0.391206 |  2.9773 |
+|  cuda  | torch.float16  |       rotate      |    raw     | 0.383723 |  3.4228 |
+|  cuda  | torch.float16  |        gray       |    raw     | 0.399094 |  2.7053 |
+|  cuda  | torch.float16  | adjust_brightness |    raw     | 0.353764 |  3.2829 |
+|  cuda  | torch.float16  |  adjust_contrast  |    raw     | **0.348479** |  3.1618 |
+|  cuda  | torch.float16  | adjust_saturation |    raw     | 0.356276 |  3.4882 |
+|  cuda  | torch.float16  |     adjust_hue    |    raw     | **0.321324** |  3.1441 |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float32  |       basic       |    raw     | 0.402671 |  2.4861 |
+|  cuda  | torch.float32  |       mirror      |    raw     | 0.396169 |  4.4776 |
+|  cuda  | torch.float32  |     translate     |    raw     | 0.391199 |  3.7722 |
+|  cuda  | torch.float32  |       rotate      |    raw     | 0.373028 |  4.5999 |
+|  cuda  | torch.float32  |        gray       |    raw     | 0.399099 |  3.3985 |
+|  cuda  | torch.float32  | adjust_brightness |    raw     | 0.353769 |  4.379  |
+|  cuda  | torch.float32  |  adjust_contrast  |    raw     | **0.348485** |  4.4648 |
+|  cuda  | torch.float32  | adjust_saturation |    raw     | 0.356281 |  4.4251 |
+|  cuda  | torch.float32  |     adjust_hue    |    raw     | **0.321324** |  4.4874 |
+
+
+The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `adjust_contrast` and `adjust_hue` augmentations achieved the best performance.
+
+<p align="center">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_ssim.png" width="500"><br>
+  <strong>Figure 4:</strong> Example of training logs using SSIMLoss
+</p>
+
+
+#### MAEMSELoss
+The results shown below were obtained using the following configurations.:
+- batch size: 128
+- learning rate: 1e-3
+- learning rate scheduler: CosineAnnealingLR, where 'T_max' is `10000` and 'eta_min' is `1e-9`
+- cost function: MAEMSELoss
+- monitor: val_mae
+- mode: min
+- patience: 30
+- min_delta: 0.005
+
+| Device |     Dtype      |      TTA Type     | Model Type |   MAE    | Elapsed |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.bfloat16 |       basic       |    raw     | **0.229096** |  2.3508 |
+|  cuda  | torch.bfloat16 |       mirror      |    raw     | **0.222447** |  3.3984 |
+|  cuda  | torch.bfloat16 |     translate     |    raw     | 0.234455 |  3.0097 |
+|  cuda  | torch.bfloat16 |       rotate      |    raw     | 0.263004 |  3.5871 |
+|  cuda  | torch.bfloat16 |        gray       |    raw     | **0.228409** |  2.7951 |
+|  cuda  | torch.bfloat16 | adjust_brightness |    raw     | 0.300858 |  3.8335 |
+|  cuda  | torch.bfloat16 |  adjust_contrast  |    raw     | 0.300361 |  3.4225 |
+|  cuda  | torch.bfloat16 | adjust_saturation |    raw     | 0.299915 |  3.4862 |
+|  cuda  | torch.bfloat16 |     adjust_hue    |    raw     | 0.275534 |  4.0785 |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float16  |       basic       |    raw     | **0.229066** |  2.3014 |
+|  cuda  | torch.float16  |       mirror      |    raw     | **0.222435** |  3.4938 |
+|  cuda  | torch.float16  |     translate     |    raw     | 0.234472 |  2.9563 |
+|  cuda  | torch.float16  |       rotate      |    raw     | 0.262888 |  3.3159 |
+|  cuda  | torch.float16  |        gray       |    raw     | **0.228343** |  2.9073 |
+|  cuda  | torch.float16  | adjust_brightness |    raw     | 0.300515 |  3.6367 |
+|  cuda  | torch.float16  |  adjust_contrast  |    raw     | 0.300016 |  3.3854 |
+|  cuda  | torch.float16  | adjust_saturation |    raw     | 0.299566 |  3.1705 |
+|  cuda  | torch.float16  |     adjust_hue    |    raw     | 0.275244 |  3.623  |
+| :----: | :------------: | :---------------: | :--------: | :------: | :-----: |
+|  cuda  | torch.float32  |       basic       |    raw     | **0.229067** |  2.7052 |
+|  cuda  | torch.float32  |       mirror      |    raw     | **0.222442** |  4.5276 |
+|  cuda  | torch.float32  |     translate     |    raw     | 0.234472 |  3.8642 |
+|  cuda  | torch.float32  |       rotate      |    raw     | 0.256246 |  4.7925 |
+|  cuda  | torch.float32  |        gray       |    raw     | **0.228345** |  3.5888 |
+|  cuda  | torch.float32  | adjust_brightness |    raw     | 0.300566 |  4.5519 |
+|  cuda  | torch.float32  |  adjust_contrast  |    raw     | 0.300067 |  4.5592 |
+|  cuda  | torch.float32  | adjust_saturation |    raw     | 0.299616 |  4.5896 |
+|  cuda  | torch.float32  |     adjust_hue    |    raw     | 0.275282 |  4.6661 |
+
+The table above presents several post-processing data augmentation methods. These include data diversification techniques such as mirroring, translation, and rotation, as well as color and illumination variations involving adjustments to brightness, contrast, saturation, and hue, and transformations of the color space (e.g., grayscale). Based on the results, the `mirror` and `grayscale` augmentations achieved the best performance.
+
+<p align="center">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/train_log_maemse.png" width="500"><br>
+  <strong>Figure 5:</strong> Example of training logs using MAE + MSE loss
+</p>
+
+Based on the results, we observe no improvement in validation accuracy during the final 30 epochs; therefore, training was early stopped at epoch 50.
 
 
 
 ## Outputs
+
+Figure 1 presents five test images in the left column and five images that meet the technical requirements (to 1x28x28 grayscale horizontally and vertically flipped images) in the right column.
 
 <p align="center">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/real_image/ep0.png" width="500"><br>
   <strong>Figure 1:</strong> Example of real image with output's technical requirements
 </p>
 
-Mai jos sunt prezentate mai multe rezultate obtinute in urma antrenarii modelului cu optimizatorul adam si planificatorul CosineAnnealingLR, folosind 
+In the figures below, the results are presented as follows: the left column shows the input images, and the right column shows the generated images.
+
+The results presented below were obtained using the following configurations:
+- batch size: 128
+- learning rate: 1e-3
+- learning rate scheduler: CosineAnnealingLR
+- optimizer: Adam
+- cost function: MAEMSELoss
 
 <p align="center">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_28x28/ep199.png" width="45%">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR/ep99.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
-  <strong>Figure 2:</strong> a) <em>Antrenare cu optimizatorul adam, learning rate 1e-3, learning rate scheduler CosineAnnealingLR</em>; b) <em>Antrenare cu optimizatorul adam, learning rate 1e-3, learning rate scheduler CosineAnnealingLR</em>
-</p>
-
-<p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_ca_maemse_v1/ep48.png" width="45%">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/advanced_muon_CosineAnnealingLR_1e-3/ep299.png" width="45%"><br>
-   <span style="margin-right:400px">a)</span><span>b)</span><br>
-  <strong>Figure 5:</strong> a) <em>adam_CosineAnnealingLR_SSIMLoss_28x28 Generator output</em>; b) <em>Ground truth adam_CosineAnnealingLR_KLDivLoss_28x28</em>
+  <strong>Figure 2:</strong> a) <em>Training ran for 199 epochs</em>; b) <em>Training ran for 99 epochs</em>
 </p>
 
 <p align="center">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_next/ep99.png" width="45%">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/advanced_muon_CosineAnnealingLR/ep294.png" width="45%"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_ca_maemse_v1/ep48.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
-  <strong>Figure 3:</strong> a) <em>adam_CosineAnnealingLR_next Generator output</em>; b) <em>Ground truth advanced_muon_CosineAnnealingLR</em>
+  <strong>Figure 3:</strong> a) <em>Training ran for 99 epochs</em>; b) <em>Training ran for 48 epochs</em>
 </p>
+
+The images shown in Figures 2a, 2b, and 3a were generated using a more complex model with 5 million parameters, while the image in Figure 3b was generated using the model configuration described above see [Build UNetResNet](#build-unetresnet)
+
+
+
+The results presented below were obtained using the following configurations:
+- batch size: 128
+- learning rate: 1e-3
+- learning rate scheduler: CosineAnnealingLR
+- optimizer: Moun
+- cost function: MAEMSELoss
+
+<p align="center">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/advanced_muon_CosineAnnealingLR/ep294.png" width="45%">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/advanced_muon_CosineAnnealingLR_1e-3/ep299.png" width="45%"><br>
+   <span style="margin-right:400px">a)</span><span>b)</span><br>
+  <strong>Figure 4:</strong> a) <em>Training ran for 294 epochs</em>; b) <em>Training ran for 299 epochs</em>
+</p>
+
+The results presented below were obtained using the following configurations:
+- batch size: 128
+- learning rate: 1e-3
+- learning rate scheduler: CosineAnnealingLR
+- optimizer: Adam
 
 <p align="center">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_SSIMLoss_28x28/ep0.png" width="45%">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_KLDivLoss_28x28/ep28.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
-  <strong>Figure 4:</strong> a) <em>adam_CosineAnnealingLR_SSIMLoss_28x28 Generator output</em>; b) <em>Ground truth adam_CosineAnnealingLR_KLDivLoss_28x28</em>
+  <strong>Figure 5:</strong> a) <em>During training, the model was optimized using the SSIM loss function</em>; b) <em>During training, the model was optimized using the KLDiv loss function.</em>
 </p>
-
 
