@@ -89,12 +89,8 @@ class SSIMLoss(nn.Module):
       window = window.repeat(channels, 1, 1, 1)
       return window
 
-   def filter2D(
-         self,
-         input: torch.Tensor,
-         kernel: torch.Tensor,
-         channel: int) -> torch.Tensor:
-      return F.conv2d(input, kernel, padding=self.padding, groups=channel)
+   def filter2D(self, inputs: torch.Tensor, kernel: torch.Tensor, channel: int) -> torch.Tensor:
+      return F.conv2d(inputs, kernel, padding=self.padding, groups=channel)
 
    def forward(  # type: ignore
          self,
@@ -150,4 +146,4 @@ class SSIMLoss(nn.Module):
          loss = torch.sum(loss)
       elif (self.reduction == "none"):
          pass
-      return 1.-loss
+      return loss
