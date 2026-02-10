@@ -762,15 +762,21 @@ The table above presents several post-processing data augmentation methods. Thes
 
 Based on the results, we observe no improvement in validation accuracy during the final 30 epochs; therefore, training was early stopped at epoch 50.
 
+### Conclusion:
+Based on the conducted experiments, we observed that models trained with the *MAE* (`0.231694`) and *MSE* (`0.244284`) loss functions achieved the lowest *mean absolute error* among all evaluated configurations. Building on this observation, we combined these two loss functions to create a hybrid *MAE+MSE* loss (`0.229096`), which further reduced the *mean absolute error* and yielded the best overall performance.
+
+From the post-processing augmentation experiments, we found that models trained with *MAE*, *MSE*, and *MAE+MSE* achieved their lowest *mean absolute error* when test-time augmentation (TTA) methods such as *mirroring* or *grayscale* conversion were applied. In contrast, models trained with the *SSIM* and *KLDiv* loss functions achieved their lowest *mean absolute errors* during post-processing when color-space transformations were applied. Specifically, for *SSIM*, the most effective augmentations were `adjust_contrast` and `adjust_hue`, while for *KLDiv*, the best results were achieved using the structural augmentation `rotate` and the color-space transformation `adjust_hue`.
+
+Based on these findings, we conclude that hybridizing loss functions—particularly combining *MAE* with *SSIM* can further reduce the *mean absolute error*. Additionally, these improvements extend to post-processing, where combining structural augmentations such as *mirroring* with color-space transformations like *adjust_hue* can produce images with lower *mean absolute error*.
 
 
 ## Outputs
 
-Figure 1 presents five test images in the left column and five images that meet the technical requirements (to 1x28x28 grayscale horizontally and vertically flipped images) in the right column.
+Figure 6 presents five test images in the left column and five images that meet the technical requirements (to 1x28x28 grayscale horizontally and vertically flipped images) in the right column.
 
 <p align="center">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/real_image/ep0.png" width="500"><br>
-  <strong>Figure 1:</strong> Example of real image with output's technical requirements
+  <strong>Figure 6:</strong> Example of real image with output's technical requirements
 </p>
 
 In the figures below, the results are presented as follows: the left column shows the input images, and the right column shows the generated images.
@@ -780,23 +786,35 @@ The results presented below were obtained using the following configurations:
 - learning rate: 1e-3
 - learning rate scheduler: CosineAnnealingLR
 - optimizer: Adam
-- cost function: MAEMSELoss
 
 <p align="center">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_28x28/ep199.png" width="45%">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR/ep99.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
-  <strong>Figure 2:</strong> a) <em>Training ran for 199 epochs</em>; b) <em>Training ran for 99 epochs</em>
+  <strong>Figure 7:</strong> a) <em>Training ran for 199 epochs</em>; b) <em>Training ran for 99 epochs</em>
 </p>
+
+The images shown in Figure 7 were generated using a more complex model with 5 million parameters, while the image in Figure 8-10 was generated using the model configuration described above see [Build UNetResNet](#build-unetresnet)
+
+
 
 <p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_next/ep99.png" width="45%">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_ca_maemse_v1/ep48.png" width="45%"><br>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_MAELoss_28x28/ep49.png" width="45%">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_MSELoss_28x28/ep45.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
-  <strong>Figure 3:</strong> a) <em>Training ran for 99 epochs</em>; b) <em>Training ran for 48 epochs</em>
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_ca_maemse_v1/ep48.png" width="45%"><br>
+   <span>c)</span><br>
+  <strong>Figure 8:</strong> a) <em>During training, the model was optimized using the MAE loss function</em>; b) <em>During training, the model was optimized using the MSE loss function</em>; c) <em>During training, the model was optimized using the MAE+MSE loss function.</em>
 </p>
 
-The images shown in Figures 2a, 2b, and 3a were generated using a more complex model with 5 million parameters, while the image in Figure 3b was generated using the model configuration described above see [Build UNetResNet](#build-unetresnet)
+
+
+<p align="center">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_SSIMLoss_28x28/ep94.png" width="45%">
+  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_KLDivLoss_28x28/ep52.png" width="45%"><br>
+   <span style="margin-right:400px">a)</span><span>b)</span><br>
+  <strong>Figure 9:</strong> a) <em>During training, the model was optimized using the SSIM loss function</em>; b) <em>During training, the model was optimized using the KLDiv loss function.</em>
+</p>
 
 
 
@@ -811,19 +829,18 @@ The results presented below were obtained using the following configurations:
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/advanced_muon_CosineAnnealingLR/ep294.png" width="45%">
   <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/advanced_muon_CosineAnnealingLR_1e-3/ep299.png" width="45%"><br>
    <span style="margin-right:400px">a)</span><span>b)</span><br>
-  <strong>Figure 4:</strong> a) <em>Training ran for 294 epochs</em>; b) <em>Training ran for 299 epochs</em>
+  <strong>Figure 10:</strong> a) <em>Training ran for 294 epochs</em>; b) <em>Training ran for 299 epochs</em>
 </p>
 
-The results presented below were obtained using the following configurations:
-- batch size: 128
-- learning rate: 1e-3
-- learning rate scheduler: CosineAnnealingLR
-- optimizer: Adam
 
-<p align="center">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_SSIMLoss_28x28/ep0.png" width="45%">
-  <img src="/home/gheorghe/Desktop/Proiecte/master/CARN/laborator_10/out/adam_CosineAnnealingLR_KLDivLoss_28x28/ep28.png" width="45%"><br>
-   <span style="margin-right:400px">a)</span><span>b)</span><br>
-  <strong>Figure 5:</strong> a) <em>During training, the model was optimized using the SSIM loss function</em>; b) <em>During training, the model was optimized using the KLDiv loss function.</em>
-</p>
+### Conclusion:
 
+Based on the experiments conducted in this study, the following conclusions can be drawn:
+- The hybrid *MAE+MSE* loss function yields the lowest *mean absolute error* among all evaluated loss functions.
+- When training with the *MAE*, *MSE*, and *MAE+MSE* loss functions, the TTA mirror and grayscale methods achieve the lowest *mean absolute error*.
+- For models trained with the *SSIM* loss function, the TTA methods `adjust_contrast` and `adjust_hue` provide the lowest *mean absolute error*.
+- For models trained with the *KLDiv* loss function, the TTA methods `rotate` and `adjust_hue` lead to the lowest *mean absolute error*.
+- An analysis of the results shown in Figures 6–10 indicates that the current model architecture described in [Build UNetResNet](#build-unetresnet) requires modification, either by increasing model depth (as illustrated in Figure 7) or by further tuning the hyperparameters, as no optimal configuration has yet been identified for this architecture.
+- Analysis of the training stage using the Moun figure 10 optimizer shows that additional hyperparameter fine-tuning is necessary to obtain visually improved results with lower *mean absolute error*.
+
+Finally, post-processing results demonstrate that for models trained with *MAE*, *MSE*, and *MAE+MSE*, the *mean absolute error* decreases from `0.229096` to `0.222447` when applying the TTA `mirror` method. Similarly, for models trained with the *SSIM* loss function, the *mean absolute error* decreases from *0.402671* to *0.321324* when using the TTA `adjust_hue` method. Based on these findings, future work should investigate a hybrid loss function combining *MAE+MSE+SSIM*, as well as a hybrid TTA strategy that integrates the `mirror` and `adjust_hue` methods, in order to further reduce the *mean absolute error*.
