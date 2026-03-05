@@ -1,12 +1,7 @@
 #!/usr/bin/python
 
-import os
 import copy
 import torch
-from torch import nn
-
-from torchvision.transforms import v2
-from torchvision.transforms.v2.functional import hflip
 
 import warnings
 from itertools import product
@@ -19,15 +14,18 @@ from tqdm.auto import tqdm
 
 from sys_function import * # este in root
 sys_remove_modules("time_mon.gpu_time_mon")
+sys_remove_modules("metrics.metrics_list")
 
 from time_mon.gpu_time_mon import *
+from metrics.metrics_list import *
 
-class FinetuneTTA():
-   def __init__(self, dataset, tta_obj, select_model):
+class FinetuneTTAClassification():
+   def __init__(self, dataset, tta_obj, select_model, metrics:dict = {}):
       self.dataset = dataset
       self.tta_obj = tta_obj
       self.select_model = select_model
       self.time_mon_obj = GPUTimeMon()
+      self.metrics = MetricsList(metrics)
 
    def tta_inference(self, device: torch.device) -> float:
       """This function performs inference and TTA, while measuring the elapsed time.
@@ -138,3 +136,29 @@ class FinetuneTTA():
 
          print(prety_table_obj)
       return prety_table_obj
+
+   # @torch.no_grad()  # This is what you usually see in tutorials
+   @torch.inference_mode()  # This is the recommended way to do this
+   def eval(self, device, model_type):
+      model = self.select_model(device, model_type)
+      model.eval()
+
+      lst_predicts = []
+      lst_targets  = []
+
+      for inputs, targets in tqdm(self.dataset, desc="Validation", leave=False):  # Disable on notebook
+         # go to device
+         inputs  = inputs.to(device,  non_blocking=True)
+         targets = targets.to(device, non_blocking=True)
+
+         predicted = model(inputs)
+         # Here we don't need to argmax the targets, because we have hard labels. We don't use DA during validation.
+         # We don't need to detach, because we are already in inference_mode
+         predicted = predicted.detach().cpu().argmax(dim=1)
+         targets   = targets.detach().cpu()
+         # 
+         lst_predicts.append(predicted)
+         lst_targets.append(targets)
+         
+
+      return torch.cat(lst_targets, 0), torch.cat(lst_predicts, 0)
