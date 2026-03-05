@@ -10,10 +10,11 @@ from pathlib import Path
 from callback.callback_base import *
 
 class SaveFakeImage(CallbacksBase):
-   def __init__(self, model, dataset, transform, device, size=1, path="", freq=1):
+   def __init__(self, model, dataset, in_transform, out_transform, device, size=1, path="", freq=1):
       self.setModel(model)
       self.dataset   = dataset
-      self.transform = transform
+      self.in_transform  = in_transform
+      self.out_transform = out_transform
       self.device  = device
       self.figsize = (size, 2) # (rows, column)
       self.path    = path
@@ -52,11 +53,13 @@ class SaveFakeImage(CallbacksBase):
    def __predict_no_model(self):
       images = []
       for idx in range(self.figsize[0]):
-         inputs, _ = self.dataset[idx]
+         inputs, targets = self.dataset[idx]
          num_channels = inputs.size(0)
-         fake_img = np.zeros((10, 10, num_channels), dtype=np.uint8)
-         row_img = self.transform(inputs)
-         row_img = torch.permute(row_img, dims=(1, 2, 0)).detach().cpu().numpy().astype(np.uint8)
+         row_img  = self.in_transform(inputs)
+         fake_img = self.out_transform(targets)
+         print("fake_img", fake_img.min(), fake_img.max(), np.unique(np.array(fake_img)), fake_img.shape)
+         row_img  = torch.permute(row_img,  dims=(1, 2, 0)).detach().cpu().numpy().astype(np.uint8)
+         fake_img = fake_img.detach().cpu().numpy().astype(np.uint8)
          images.append(row_img)
          images.append(fake_img)
       return images
@@ -72,13 +75,13 @@ class SaveFakeImage(CallbacksBase):
             fake_img = torch.unsqueeze(inputs, dim=0)
             fake_img = self._model(fake_img)
             fake_img = torch.squeeze(fake_img, dim=0)
-            fake_img = self.transform(fake_img)
-            fake_img = torch.permute(fake_img, dims=(1, 2, 0)).detach().cpu().numpy().astype(np.uint8)
+            fake_img = self.out_transform(fake_img)
+            fake_img = fake_img.detach().cpu().numpy().astype(np.uint8)
          except Exception as e:
             num_channels = inputs.size(0)
             fake_img = np.zeros((10, 10, num_channels), dtype=np.uint8)
             print("Error prediction, fake image: '{}'".format(e))
-         row_img = self.transform(inputs)
+         row_img = self.in_transform(inputs)
          row_img = torch.permute(row_img, dims=(1, 2, 0)).detach().cpu().numpy().astype(np.uint8)
          images.append(row_img)
          images.append(fake_img)
@@ -99,10 +102,16 @@ class SaveFakeImage(CallbacksBase):
             plt.title(titles[idx])
 
    def predict_and_put(self):
-      if (hasattr(self, "_model")):
-         images = self.__predict_model()
+      if (hasattr(self, "_model") and (self._model is not None)):
+         try:
+            images = self.__predict_model()
+         except Exception as e:
+            print("__predict_model: {}".format(e))
       else:
-         images = self.__predict_no_model()
+         try:
+            images = self.__predict_no_model()
+         except Exception as e:
+            print("__predict_no_model: {}".format(e))
          print("Error no model '{}', fake image !".format(self._model))
       self.__put(images)
 
