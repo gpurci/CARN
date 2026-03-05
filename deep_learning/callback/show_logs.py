@@ -45,9 +45,9 @@ class ShowLogs(CallbacksBase):
    def _get_statistic(self):
       info = ""
       for key in self.logs.keys():
-         act = self.logs[key][-1]
-         min_key = self.min_logs[key]
-         max_key = self.max_logs[key]
+         act = round(self.logs[key][-1], 5)
+         min_key = round(self.min_logs[key], 5)
+         max_key = round(self.max_logs[key], 5)
          info += "{}:\n\tmin: {},\tmax: {},\tcur: {}\n".format(key, min_key, max_key, act)
 
       return info
@@ -94,10 +94,10 @@ class ShowLogs(CallbacksBase):
    def update_statistic(self, prev_logs, key, val, mode):
       if (mode == "min"):
          if (prev_logs[key] >= val):
-            prev_logs[key] = round(val, 5)
+            prev_logs[key] = val
       else:
          if (prev_logs[key] <= val):
-            prev_logs[key] = round(val, 5)
+            prev_logs[key] = val
 
    def __put(self, keys, figsize):
       fig = plt.figure(figsize=(10, 5*figsize))
